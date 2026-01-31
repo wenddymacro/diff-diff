@@ -598,14 +598,14 @@ class TripleDifference:
             )
 
         # Compute inference
-        t_stat = att / se if se > 0 else 0.0
+        t_stat = att / se if np.isfinite(se) and se > 0 else np.nan
         df = n_obs - 8  # Approximate df (8 cell means)
         if covariates:
             df -= len(covariates)
         df = max(df, 1)
 
         p_value = compute_p_value(t_stat, df=df)
-        conf_int = compute_confidence_interval(att, se, self.alpha, df=df)
+        conf_int = compute_confidence_interval(att, se, self.alpha, df=df) if np.isfinite(se) and se > 0 else (np.nan, np.nan)
 
         # Get number of clusters if clustering
         n_clusters = None

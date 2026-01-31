@@ -672,3 +672,128 @@ class TestRunAllPlaceboTests:
         # Check that each result is either PlaceboTestResults or error dict
         for key, value in results.items():
             assert isinstance(value, (PlaceboTestResults, dict))
+
+
+class TestDiagnosticsTStatNaN:
+    """Tests for NaN t_stat when SE is invalid in diagnostic functions."""
+
+    def test_permutation_test_tstat_nan_when_se_zero(self):
+        """permutation_test t_stat is NaN when SE is zero (all permutations identical)."""
+        np.random.seed(42)
+
+        # Create data where all units have deterministic outcomes
+        # so permutation distribution has zero variance
+        n_units = 20
+        data = []
+        for unit in range(n_units):
+            is_treated = unit < n_units // 2
+            for post in [0, 1]:
+                y = 5.0
+                if is_treated and post == 1:
+                    y += 2.0
+                data.append({
+                    "unit": unit,
+                    "post": post,
+                    "outcome": y,
+                    "treated": int(is_treated),
+                })
+
+        df = pd.DataFrame(data)
+
+        import warnings
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("always")
+            result = permutation_test(
+                df,
+                outcome="outcome",
+                treatment="treated",
+                time="post",
+                unit="unit",
+                n_permutations=20,
+                seed=42,
+            )
+
+        se = result.se
+        t_stat = result.t_stat
+
+        if not np.isfinite(se) or se == 0:
+            assert np.isnan(t_stat), (
+                f"permutation t_stat should be NaN when SE={se}, got {t_stat}"
+            )
+        else:
+            expected = result.original_effect / se
+            assert np.isclose(t_stat, expected), (
+                f"permutation t_stat should be effect/SE, "
+                f"expected {expected}, got {t_stat}"
+            )
+
+    def test_leave_one_out_tstat_nan_when_se_zero(self):
+        """leave_one_out_test t_stat and CI are NaN when SE is zero."""
+        np.random.seed(42)
+
+        # Create data where leaving out any unit gives identical results
+        # (deterministic outcomes, no noise)
+        n_units = 20
+        data = []
+        for unit in range(n_units):
+            is_treated = unit < n_units // 2
+            for post in [0, 1]:
+                y = 5.0
+                if is_treated and post == 1:
+                    y += 2.0
+                data.append({
+                    "unit": unit,
+                    "post": post,
+                    "outcome": y,
+                    "treated": int(is_treated),
+                })
+
+        df = pd.DataFrame(data)
+
+        import warnings
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("always")
+            result = leave_one_out_test(
+                df,
+                outcome="outcome",
+                treatment="treated",
+                time="post",
+                unit="unit",
+            )
+
+        se = result.se
+        t_stat = result.t_stat
+
+        if not np.isfinite(se) or se == 0:
+            assert np.isnan(t_stat), (
+                f"LOO t_stat should be NaN when SE={se}, got {t_stat}"
+            )
+            ci = result.conf_int
+            assert np.isnan(ci[0]) and np.isnan(ci[1]), (
+                f"LOO conf_int should be (NaN, NaN) when SE={se}, got {ci}"
+            )
+
+    def test_permutation_tstat_consistency(self, simple_panel_data):
+        """permutation_test t_stat = effect/SE when SE is valid."""
+        result = permutation_test(
+            simple_panel_data,
+            outcome="outcome",
+            treatment="treated",
+            time="post",
+            unit="unit",
+            n_permutations=50,
+            seed=42,
+        )
+
+        se = result.se
+        t_stat = result.t_stat
+
+        if not np.isfinite(se) or se == 0:
+            assert np.isnan(t_stat), (
+                f"t_stat should be NaN when SE={se}, got {t_stat}"
+            )
+        else:
+            expected = result.original_effect / se
+            assert np.isclose(t_stat, expected), (
+                f"t_stat should be effect/SE, expected {expected}, got {t_stat}"
+            )

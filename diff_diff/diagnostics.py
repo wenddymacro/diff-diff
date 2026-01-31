@@ -662,7 +662,7 @@ def permutation_test(
     ci_upper = np.percentile(valid_effects, (1 - alpha / 2) * 100)
 
     # T-stat from original estimate
-    t_stat = original_att / se if se > 0 else 0.0
+    t_stat = original_att / se if np.isfinite(se) and se > 0 else np.nan
 
     return PlaceboTestResults(
         test_type="permutation",
@@ -783,14 +783,14 @@ def leave_one_out_test(
     # Statistics of LOO distribution
     mean_effect = np.mean(valid_effects)
     se = np.std(valid_effects, ddof=1) if len(valid_effects) > 1 else 0.0
-    t_stat = mean_effect / se if se > 0 else 0.0
+    t_stat = mean_effect / se if np.isfinite(se) and se > 0 else np.nan
 
     # Use t-distribution for p-value
     df = len(valid_effects) - 1 if len(valid_effects) > 1 else 1
     p_value = compute_p_value(t_stat, df=df)
 
     # CI
-    conf_int = compute_confidence_interval(mean_effect, se, alpha, df=df)
+    conf_int = compute_confidence_interval(mean_effect, se, alpha, df=df) if np.isfinite(se) and se > 0 else (np.nan, np.nan)
 
     return PlaceboTestResults(
         test_type="leave_one_out",

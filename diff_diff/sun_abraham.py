@@ -600,9 +600,9 @@ class SunAbraham:
             coef_index_map,
         )
 
-        overall_t = overall_att / overall_se if overall_se > 0 else 0.0
+        overall_t = overall_att / overall_se if np.isfinite(overall_se) and overall_se > 0 else np.nan
         overall_p = compute_p_value(overall_t)
-        overall_ci = compute_confidence_interval(overall_att, overall_se, self.alpha)
+        overall_ci = compute_confidence_interval(overall_att, overall_se, self.alpha) if np.isfinite(overall_se) and overall_se > 0 else (np.nan, np.nan)
 
         # Run bootstrap if requested
         bootstrap_results = None
@@ -623,7 +623,7 @@ class SunAbraham:
 
             # Update results with bootstrap inference
             overall_se = bootstrap_results.overall_att_se
-            overall_t = overall_att / overall_se if overall_se > 0 else 0.0
+            overall_t = overall_att / overall_se if np.isfinite(overall_se) and overall_se > 0 else np.nan
             overall_p = bootstrap_results.overall_att_p_value
             overall_ci = bootstrap_results.overall_att_ci
 
@@ -640,7 +640,7 @@ class SunAbraham:
                     eff_val = event_study_effects[e]["effect"]
                     se_val = event_study_effects[e]["se"]
                     event_study_effects[e]["t_stat"] = (
-                        eff_val / se_val if se_val > 0 else 0.0
+                        eff_val / se_val if np.isfinite(se_val) and se_val > 0 else np.nan
                     )
 
         # Convert cohort effects to storage format
@@ -878,9 +878,9 @@ class SunAbraham:
             agg_var = float(weight_vec @ vcov_subset @ weight_vec)
             agg_se = np.sqrt(max(agg_var, 0))
 
-            t_stat = agg_effect / agg_se if agg_se > 0 else 0.0
+            t_stat = agg_effect / agg_se if np.isfinite(agg_se) and agg_se > 0 else np.nan
             p_val = compute_p_value(t_stat)
-            ci = compute_confidence_interval(agg_effect, agg_se, self.alpha)
+            ci = compute_confidence_interval(agg_effect, agg_se, self.alpha) if np.isfinite(agg_se) and agg_se > 0 else (np.nan, np.nan)
 
             event_study_effects[e] = {
                 "effect": agg_effect,

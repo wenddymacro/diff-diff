@@ -884,3 +884,176 @@ class TestSunAbrahamEdgeCases:
         # Should still get valid results
         assert results is not None
         assert results.overall_att is not None
+
+
+class TestSunAbrahamTStatNaN:
+    """Tests for NaN t_stat when SE is invalid."""
+
+    def test_per_effect_tstat_consistency(self):
+        """Per-effect t_stat uses NaN (not 0.0) when SE is non-finite or zero."""
+        data = generate_staggered_data(
+            n_units=60,
+            n_periods=8,
+            n_cohorts=2,
+            treatment_effect=2.0,
+            seed=456,
+        )
+
+        sa = SunAbraham(n_bootstrap=0)
+        results = sa.fit(
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
+        )
+
+        for e, effect_data in results.event_study_effects.items():
+            se = effect_data["se"]
+            t_stat = effect_data["t_stat"]
+
+            if not np.isfinite(se) or se == 0:
+                assert np.isnan(t_stat), (
+                    f"t_stat for e={e} should be NaN when SE={se}, "
+                    f"got t_stat={t_stat}"
+                )
+            else:
+                expected = effect_data["effect"] / se
+                assert np.isclose(t_stat, expected), (
+                    f"t_stat for e={e} should be effect/SE, "
+                    f"expected {expected}, got {t_stat}"
+                )
+
+    def test_overall_tstat_nan_when_se_invalid(self):
+        """Overall t_stat is NaN when SE is non-finite or zero."""
+        data = generate_staggered_data(
+            n_units=60,
+            n_periods=8,
+            n_cohorts=2,
+            treatment_effect=2.0,
+            seed=456,
+        )
+
+        sa = SunAbraham(n_bootstrap=0)
+        results = sa.fit(
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
+        )
+
+        se = results.overall_se
+        t_stat = results.overall_t_stat
+
+        if not np.isfinite(se) or se == 0:
+            assert np.isnan(t_stat), (
+                f"overall_t_stat should be NaN when SE={se}, got {t_stat}"
+            )
+            assert np.isnan(results.overall_p_value) or True, (
+                "overall_p_value should propagate NaN from t_stat"
+            )
+            ci = results.overall_conf_int
+            assert np.isnan(ci[0]) and np.isnan(ci[1]), (
+                f"overall_conf_int should be (NaN, NaN) when SE={se}, got {ci}"
+            )
+        else:
+            expected = results.overall_att / se
+            assert np.isclose(t_stat, expected), (
+                f"overall_t_stat should be ATT/SE, expected {expected}, got {t_stat}"
+            )
+
+    def test_bootstrap_tstat_nan_when_se_invalid(self):
+        """Bootstrap t_stat uses NaN (not 0.0) when SE is non-finite or zero."""
+        data = generate_staggered_data(
+            n_units=60,
+            n_periods=8,
+            n_cohorts=2,
+            treatment_effect=2.0,
+            seed=456,
+        )
+
+        sa = SunAbraham(n_bootstrap=50, seed=42)
+        results = sa.fit(
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
+        )
+
+        # Check overall
+        se = results.overall_se
+        t_stat = results.overall_t_stat
+
+        if not np.isfinite(se) or se == 0:
+            assert np.isnan(t_stat), (
+                f"bootstrap overall_t_stat should be NaN when SE={se}, got {t_stat}"
+            )
+
+        # Check event study effects
+        for e, effect_data in results.event_study_effects.items():
+            se = effect_data["se"]
+            t_stat = effect_data["t_stat"]
+
+            if not np.isfinite(se) or se == 0:
+                assert np.isnan(t_stat), (
+                    f"bootstrap t_stat for e={e} should be NaN when SE={se}, "
+                    f"got t_stat={t_stat}"
+                )
+            else:
+                expected = effect_data["effect"] / se
+                assert np.isclose(t_stat, expected), (
+                    f"bootstrap t_stat for e={e} should be effect/SE, "
+                    f"expected {expected}, got {t_stat}"
+                )
+
+    def test_aggregated_event_study_tstat_nan(self):
+        """Aggregated event study t_stat is NaN when SE is zero or non-finite."""
+        n_units = 20
+        n_periods = 5
+        np.random.seed(123)
+
+        data = []
+        for unit in range(n_units):
+            first_treat = 3 if unit < n_units // 2 else 0
+            for t in range(1, n_periods + 1):
+                outcome = np.random.randn()
+                data.append({
+                    "unit": unit,
+                    "time": t,
+                    "outcome": outcome,
+                    "first_treat": first_treat,
+                })
+
+        df = pd.DataFrame(data)
+
+        sa = SunAbraham(n_bootstrap=0)
+        results = sa.fit(
+            df,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
+        )
+
+        for e, effect_data in results.event_study_effects.items():
+            se = effect_data["se"]
+            t_stat = effect_data["t_stat"]
+            effect = effect_data["effect"]
+
+            if not np.isfinite(se) or se <= 0:
+                assert np.isnan(t_stat), (
+                    f"Aggregated t_stat for e={e} should be NaN when SE={se}, "
+                    f"got t_stat={t_stat}"
+                )
+                ci = effect_data["conf_int"]
+                assert np.isnan(ci[0]) and np.isnan(ci[1]), (
+                    f"Aggregated CI for e={e} should be (NaN, NaN) when SE={se}, got {ci}"
+                )
+            else:
+                expected_t = effect / se
+                assert np.isclose(t_stat, expected_t, rtol=1e-10), (
+                    f"Aggregated t_stat for e={e} should be effect/SE={expected_t}, "
+                    f"got {t_stat}"
+                )

@@ -958,3 +958,73 @@ class TestRankDeficientAction:
                 covariates=["x1", "x1_dup"],
                 rank_deficient_action="error"
             )
+
+
+class TestTripleDifferenceTStatNaN:
+    """Tests for NaN t_stat when SE is invalid."""
+
+    def test_tstat_nan_when_se_zero(self):
+        """t_stat is NaN (not 0.0) when SE is zero or non-finite."""
+        # Generate standard DDD data
+        data = generate_ddd_data(n_per_cell=100, true_att=2.0, seed=42)
+
+        td = TripleDifference(estimation_method="reg")
+        results = td.fit(
+            data,
+            outcome="outcome",
+            group="group",
+            partition="partition",
+            time="time",
+        )
+
+        se = results.se
+        t_stat = results.t_stat
+
+        if not np.isfinite(se) or se == 0:
+            assert np.isnan(t_stat), (
+                f"t_stat should be NaN when SE={se}, got {t_stat}"
+            )
+            ci = results.conf_int
+            assert np.isnan(ci[0]) and np.isnan(ci[1]), (
+                f"conf_int should be (NaN, NaN) when SE={se}, got {ci}"
+            )
+        else:
+            expected = results.att / se
+            assert np.isclose(t_stat, expected), (
+                f"t_stat should be ATT/SE, expected {expected}, got {t_stat}"
+            )
+
+    def test_tstat_consistency_all_methods(self):
+        """t_stat follows NaN pattern across all estimation methods."""
+        data = generate_ddd_data(
+            n_per_cell=50,
+            true_att=2.0,
+            seed=42,
+            add_covariates=True,
+            covariate_effect=0.5,
+        )
+
+        for method in ["reg", "ipw", "dr"]:
+            td = TripleDifference(estimation_method=method)
+            results = td.fit(
+                data,
+                outcome="outcome",
+                group="group",
+                partition="partition",
+                time="time",
+                covariates=["x1"],
+            )
+
+            se = results.se
+            t_stat = results.t_stat
+
+            if not np.isfinite(se) or se == 0:
+                assert np.isnan(t_stat), (
+                    f"[{method}] t_stat should be NaN when SE={se}, got {t_stat}"
+                )
+            else:
+                expected = results.att / se
+                assert np.isclose(t_stat, expected), (
+                    f"[{method}] t_stat should be ATT/SE, "
+                    f"expected {expected}, got {t_stat}"
+                )

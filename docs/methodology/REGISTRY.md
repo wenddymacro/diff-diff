@@ -16,6 +16,7 @@ This document provides the academic foundations and key implementation requireme
    - [TripleDifference](#tripledifference)
    - [TROP](#trop)
 4. [Diagnostics & Sensitivity](#diagnostics--sensitivity)
+   - [PlaceboTests](#placebotests)
    - [BaconDecomposition](#bacondecomposition)
    - [HonestDiD](#honestdid)
    - [PreTrendsPower](#pretrendspower)
@@ -319,6 +320,11 @@ where weights ŵ_{g,e} = n_{g,e} / Σ_g n_{g,e} (sample share of cohort g at eve
   - Detection: Pivoted QR decomposition with tolerance `1e-07` (R's `qr()` default)
   - Handling: Warns and drops linearly dependent columns, sets NA for dropped coefficients (R-style, matches `lm()`)
   - Parameter: `rank_deficient_action` controls behavior: "warn" (default), "error", or "silent"
+- NaN inference for undefined statistics:
+  - t_stat: Uses NaN (not 0.0) when SE is non-finite or zero
+  - p_value and CI: Also NaN when t_stat is NaN
+  - Applies to overall ATT, per-effect event study, and aggregated event study
+  - **Note**: Defensive enhancement matching CallawaySantAnna behavior; R's `fixest::sunab()` may produce Inf/NaN without warning
 
 **Reference implementation(s):**
 - R: `fixest::sunab()` (Laurent Bergé's implementation)
@@ -429,6 +435,10 @@ Doubly robust estimator:
 - Propensity scores near 0/1: trimmed at `pscore_trim` (default 0.01)
 - Empty cells: raises ValueError with diagnostic message
 - Collinear covariates: automatic detection and warning
+- NaN inference for undefined statistics:
+  - t_stat: Uses NaN (not 0.0) when SE is non-finite or zero
+  - p_value and CI: Also NaN when t_stat is NaN
+  - **Note**: Defensive enhancement; reference implementation behavior not yet documented
 
 **Reference implementation(s):**
 - Authors' replication code (forthcoming)
@@ -655,6 +665,18 @@ For joint method, LOOCV works as follows:
 ---
 
 # Diagnostics & Sensitivity
+
+## PlaceboTests
+
+**Module:** `diff_diff/diagnostics.py`
+
+*Edge cases:*
+- NaN inference for undefined statistics:
+  - `permutation_test`: t_stat is NaN when permutation SE is zero (all permutations produce identical estimates)
+  - `leave_one_out_test`: t_stat, p_value, CI are NaN when LOO SE is zero (all LOO effects identical)
+  - **Note**: Defensive enhancement matching CallawaySantAnna NaN convention
+
+---
 
 ## BaconDecomposition
 
