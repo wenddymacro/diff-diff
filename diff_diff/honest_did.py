@@ -563,14 +563,32 @@ def _extract_event_study_params(
         pre_periods = results.pre_periods
         post_periods = results.post_periods
 
-        # Extract all estimated effects in chronological order
-        all_estimated = sorted(results.period_effects.keys())
+        # Filter out periods with non-finite effects/SEs (e.g. rank-deficient)
+        all_estimated = sorted(
+            p
+            for p in results.period_effects.keys()
+            if np.isfinite(results.period_effects[p].effect)
+            and np.isfinite(results.period_effects[p].se)
+        )
+
+        if not all_estimated:
+            raise ValueError(
+                "No period effects with finite estimates found. " "Cannot compute HonestDiD bounds."
+            )
+
         effects = [results.period_effects[p].effect for p in all_estimated]
         ses = [results.period_effects[p].se for p in all_estimated]
 
         beta_hat = np.array(effects)
         num_pre_periods = sum(1 for p in all_estimated if p in pre_periods)
         num_post_periods = sum(1 for p in all_estimated if p in post_periods)
+
+        if num_pre_periods == 0:
+            raise ValueError(
+                "No pre-period effects with finite estimates found. "
+                "HonestDiD requires at least one identified pre-period "
+                "coefficient."
+            )
 
         # Extract proper sub-VCV for interaction terms
         if (
@@ -1236,10 +1254,11 @@ class HonestDiD:
         """
         if isinstance(results, MultiPeriodDiDResults):
             # Pre-period effects are now in period_effects directly
+            # Filter out non-finite effects (e.g. from rank-deficient designs)
             pre_effects = [
                 abs(results.period_effects[p].effect)
                 for p in pre_periods
-                if p in results.period_effects
+                if p in results.period_effects and np.isfinite(results.period_effects[p].effect)
             ]
             if pre_effects:
                 return max(pre_effects)

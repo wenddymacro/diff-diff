@@ -2244,6 +2244,46 @@ class TestMultiPeriodDiDEventStudy:
         reversal_warnings = [x for x in w if "Treatment reversal" in str(x.message)]
         assert len(reversal_warnings) > 0, "Expected warning about treatment reversal"
 
+    def test_time_varying_treatment_warning(self):
+        """Time-varying D_it (0 pre, 1 post) should emit warning about ever-treated indicator."""
+        np.random.seed(42)
+        data = []
+        for unit_id in range(40):
+            is_treated = unit_id < 20
+            for period in range(6):
+                # D_it: 0 in pre-periods, 1 in post-periods for treated units
+                d = 1 if is_treated and period >= 3 else 0
+                y = 10.0 + period * 0.5 + (2.0 if d else 0) + np.random.normal(0, 0.3)
+                data.append(
+                    {
+                        "unit": unit_id,
+                        "period": period,
+                        "treated": d,
+                        "outcome": y,
+                    }
+                )
+        df = pd.DataFrame(data)
+
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            results = MultiPeriodDiD().fit(
+                df,
+                outcome="outcome",
+                treatment="treated",
+                time="period",
+                post_periods=[3, 4, 5],
+                reference_period=2,
+                unit="unit",
+            )
+        dit_warnings = [x for x in w if "time-varying" in str(x.message).lower()]
+        assert len(dit_warnings) > 0, "Expected warning about time-varying treatment"
+        assert "ever_treated" in str(dit_warnings[0].message)
+        # Results should still be produced (but may have NaN due to rank deficiency)
+        assert results is not None
+        assert len(results.period_effects) > 0
+
     def test_staggered_no_false_positive_unbalanced(self):
         """Unbalanced panel with simultaneous treatment should not trigger staggered warning."""
         np.random.seed(42)

@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - t_stat uses `np.isfinite(se) and se > 0` guard (consistent with other estimators)
 
 ### Added
+- Time-varying treatment warning when `unit` is provided and treatment varies
+  within units (guides users toward ever-treated indicator D_i)
 - `unit` parameter to `MultiPeriodDiD.fit()` for staggered adoption detection
 - `reference_period` and `interaction_indices` attributes on `MultiPeriodDiDResults`
 - `pre_period_effects` and `post_period_effects` convenience properties on results
@@ -34,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The `variance_method` field has also been removed from `TROPResults`.
 
 ### Fixed
+- HonestDiD: filter non-finite pre-period effects from MultiPeriodDiD results
+  (prevents NaN propagation into sensitivity bounds)
 - HonestDiD VCV extraction: now uses interaction sub-VCV instead of full regression VCV
   (via `interaction_indices` period → column index mapping)
 

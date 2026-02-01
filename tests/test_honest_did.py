@@ -693,8 +693,12 @@ class TestIntegration:
 class TestEdgeCases:
     """Tests for edge cases and error handling."""
 
-    def test_single_post_period(self):
-        """Test with single post-period."""
+    def test_single_post_period_no_pre_effects_raises(self):
+        """Test with single post-period and no pre-period effects raises ValueError.
+
+        HonestDiD requires pre-period coefficients for sensitivity analysis.
+        A results object with only post-period effects is not usable.
+        """
         period_effects = {
             4: PeriodEffect(
                 period=4, effect=5.0, se=0.5, t_stat=10.0, p_value=0.0001, conf_int=(4.02, 5.98)
@@ -717,9 +721,8 @@ class TestEdgeCases:
         )
 
         honest = HonestDiD(method="relative_magnitude", M=1.0)
-        bounds = honest.fit(results)
-
-        assert isinstance(bounds, HonestDiDResults)
+        with pytest.raises(ValueError, match="No pre-period effects with finite"):
+            honest.fit(results)
 
     def test_m_zero_recovers_standard(self, mock_multiperiod_results):
         """Test that M=0 gives tighter bounds."""
@@ -815,6 +818,132 @@ class TestEdgeCases:
             # Max violation should reflect actual pre-period coefficients, not 0
             # The actual effects are non-zero due to sampling variation
             assert max_violation > 0, "max_pre_violation should be > 0 when real pre-periods exist"
+
+    def test_honest_did_filters_nan_pre_period_effects(self):
+        """HonestDiD should filter NaN pre-period effects from MultiPeriodDiDResults.
+
+        When MultiPeriodDiD produces NaN effects (e.g. from rank-deficient designs
+        with time-varying treatment), HonestDiD should skip those periods rather
+        than propagating NaN into sensitivity bounds.
+        """
+        # Create results with one NaN pre-period (simulating rank deficiency)
+        period_effects = {
+            0: PeriodEffect(
+                period=0,
+                effect=np.nan,
+                se=np.nan,
+                t_stat=np.nan,
+                p_value=np.nan,
+                conf_int=(np.nan, np.nan),
+            ),
+            1: PeriodEffect(
+                period=1,
+                effect=0.1,
+                se=0.3,
+                t_stat=0.33,
+                p_value=0.74,
+                conf_int=(-0.49, 0.69),
+            ),
+            # Reference period (2) omitted
+            3: PeriodEffect(
+                period=3,
+                effect=2.5,
+                se=0.4,
+                t_stat=6.25,
+                p_value=0.0001,
+                conf_int=(1.72, 3.28),
+            ),
+            4: PeriodEffect(
+                period=4,
+                effect=2.8,
+                se=0.4,
+                t_stat=7.0,
+                p_value=0.0001,
+                conf_int=(2.02, 3.58),
+            ),
+        }
+
+        # Build VCV with NaN row/col for period 0 (rank-deficient)
+        interaction_indices = {0: 0, 1: 1, 3: 2, 4: 3}
+        vcov_with_nan = np.full((4, 4), 0.0)
+        vcov_with_nan[0, :] = np.nan
+        vcov_with_nan[:, 0] = np.nan
+        vcov_with_nan[1, 1] = 0.09
+        vcov_with_nan[2, 2] = 0.16
+        vcov_with_nan[3, 3] = 0.16
+
+        results = MultiPeriodDiDResults(
+            period_effects=period_effects,
+            avg_att=2.65,
+            avg_se=0.4,
+            avg_t_stat=6.625,
+            avg_p_value=0.0001,
+            avg_conf_int=(1.87, 3.43),
+            n_obs=400,
+            n_treated=200,
+            n_control=200,
+            pre_periods=[0, 1, 2],
+            post_periods=[3, 4],
+            vcov=vcov_with_nan,
+            reference_period=2,
+            interaction_indices=interaction_indices,
+        )
+
+        # _extract_event_study_params should filter out period 0 (NaN)
+        beta_hat, sigma, num_pre, num_post, pre_p, post_p = _extract_event_study_params(results)
+        assert len(beta_hat) == 3  # periods 1, 3, 4 (period 0 filtered)
+        assert num_pre == 1  # only period 1
+        assert num_post == 2  # periods 3, 4
+        assert np.all(np.isfinite(beta_hat))
+        assert np.all(np.isfinite(sigma))
+
+        # _estimate_max_pre_violation should ignore the NaN period
+        honest = HonestDiD(method="relative_magnitude", M=1.0)
+        max_viol = honest._estimate_max_pre_violation(results, [0, 1])
+        assert np.isfinite(max_viol)
+        assert max_viol == pytest.approx(0.1, abs=1e-10)  # only period 1's |effect|
+
+    def test_honest_did_all_pre_nan_raises(self):
+        """HonestDiD should raise ValueError when all pre-period effects are NaN."""
+        period_effects = {
+            0: PeriodEffect(
+                period=0,
+                effect=np.nan,
+                se=np.nan,
+                t_stat=np.nan,
+                p_value=np.nan,
+                conf_int=(np.nan, np.nan),
+            ),
+            # Reference period (1) omitted
+            2: PeriodEffect(
+                period=2,
+                effect=2.5,
+                se=0.4,
+                t_stat=6.25,
+                p_value=0.0001,
+                conf_int=(1.72, 3.28),
+            ),
+        }
+
+        results = MultiPeriodDiDResults(
+            period_effects=period_effects,
+            avg_att=2.5,
+            avg_se=0.4,
+            avg_t_stat=6.25,
+            avg_p_value=0.0001,
+            avg_conf_int=(1.72, 3.28),
+            n_obs=200,
+            n_treated=100,
+            n_control=100,
+            pre_periods=[0, 1],
+            post_periods=[2],
+            vcov=np.diag([0.16]),
+            reference_period=1,
+            interaction_indices={0: 0, 2: 1},
+        )
+
+        with pytest.raises(ValueError, match="No pre-period effects with finite"):
+            _extract_event_study_params(results)
 
 
 # =============================================================================

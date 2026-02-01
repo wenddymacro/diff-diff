@@ -99,7 +99,10 @@ CallawaySantAnna or SunAbraham instead.
 - Warns when only 1 pre-period available (≥2 needed to test parallel trends;
   ATT is still valid but pre-trends assessment is not possible)
 - Reference period defaults to last pre-treatment period (e=-1 convention)
-- Warns if treatment timing varies across units (suggests CallawaySantAnna)
+- Treatment indicator should be time-invariant ever-treated (D_i);
+  warns when time-varying D_it detected (requires `unit` parameter)
+- Warns if treatment timing varies across units when `unit` is provided
+  (suggests CallawaySantAnna or SunAbraham instead)
 - Treatment must be an absorbing state (once treated, always treated)
 
 *Estimator equation (target specification):*

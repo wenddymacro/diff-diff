@@ -741,7 +741,10 @@ class MultiPeriodDiD(DifferenceInDifferences):
         outcome : str
             Name of the outcome variable column.
         treatment : str
-            Name of the treatment group indicator column (0/1).
+            Name of the treatment group indicator column (0/1). Should be a
+            time-invariant ever-treated indicator (D_i = 1 for all periods of
+            treated units). If treatment is time-varying (D_it), pre-period
+            interaction coefficients will be unidentified.
         time : str
             Name of the time period column (can have multiple values).
         post_periods : list
@@ -830,6 +833,22 @@ class MultiPeriodDiD(DifferenceInDifferences):
                         UserWarning,
                         stacklevel=2,
                     )
+
+                # Check for time-varying treatment (D_it instead of D_i)
+                # If any unit has a 0→1 transition, the treatment column is D_it.
+                # MultiPeriodDiD expects a time-invariant ever-treated indicator.
+                warnings.warn(
+                    "Treatment indicator varies within units (time-varying "
+                    "treatment detected). MultiPeriodDiD's event-study "
+                    "specification expects a time-invariant ever-treated "
+                    "indicator (D_i = 1 for all periods of eventually-treated "
+                    "units). With time-varying treatment, pre-period "
+                    "interaction coefficients will be unidentified. Consider: "
+                    f"df['ever_treated'] = df.groupby('{unit}')['{treatment}']"
+                    ".transform('max')",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
         # Get all unique time periods
         all_periods = sorted(data[time].unique())
