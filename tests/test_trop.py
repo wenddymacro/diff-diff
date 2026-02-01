@@ -2121,25 +2121,20 @@ class TestLOOCVFallback:
             assert results.lambda_nn == 0.1, \
                 f"Expected default lambda_nn=0.1, got {results.lambda_nn}"
 
-    def test_infinity_grid_values_handled_consistently(self, simple_panel_data):
+    def test_uniform_weights_and_disabled_factor_handled_consistently(self, simple_panel_data):
         """
-        Test that infinity in grids is handled consistently in LOOCV and final estimation.
+        Test that 0.0 (uniform weights) and inf (disabled factor) are handled
+        consistently in LOOCV and final estimation.
 
-        When infinity is in the parameter grid:
-        - LOOCV converts it for computation (λ_time=∞→0, λ_unit=∞→0, λ_nn=∞→1e10)
-        - LOOCV returns the original grid value (inf) if it was best
-        - Final estimation must also convert infinity to match LOOCV behavior
-
-        This test ensures the conversion in final estimation matches LOOCV.
+        Per Athey et al. (2025) Eq. 3:
+        - λ_time=0.0 → uniform time weights (exp(-0×dist)=1)
+        - λ_unit=0.0 → uniform unit weights (exp(-0×dist)=1)
+        - λ_nn=∞ → factor model disabled (L=0), converted to 1e10 internally
         """
-        # Create estimator with infinity in grids
-        # Use grids where infinity is likely to be selected:
-        # - lambda_time_grid: [inf] forces selection of inf
-        # - lambda_nn_grid: [inf] forces selection of inf
         trop_est = TROP(
-            lambda_time_grid=[np.inf],  # Only inf available → must be selected
-            lambda_unit_grid=[0.0],     # Normal value
-            lambda_nn_grid=[np.inf],    # Only inf available → must be selected
+            lambda_time_grid=[0.0],     # Uniform time weights (disabled)
+            lambda_unit_grid=[0.0],     # Uniform unit weights (disabled)
+            lambda_nn_grid=[np.inf],    # Factor model disabled → converted to 1e10
             n_bootstrap=5,
             seed=42
         )
@@ -2152,9 +2147,9 @@ class TestLOOCVFallback:
             time="period",
         )
 
-        # ATT should be finite (no NaN/inf from unconverted infinity parameters)
+        # ATT should be finite
         assert np.isfinite(results.att), (
-            f"ATT should be finite when infinity params are converted, got {results.att}"
+            f"ATT should be finite with uniform weights and no factor model, got {results.att}"
         )
 
         # SE should be finite or at least non-negative
@@ -2162,29 +2157,53 @@ class TestLOOCVFallback:
             f"SE should be finite, got {results.se}"
         )
 
-        # The stored lambda values should be the original grid values (inf)
-        # because we store what was selected, but conversion happens internally
-        # (This documents current behavior; the key is that ATT is finite)
-        assert np.isinf(results.lambda_time) or results.lambda_time == 0.0, (
-            f"lambda_time should be inf (stored) or 0.0 (if converted for storage)"
+        # lambda_time and lambda_unit should be 0.0 (uniform weights)
+        assert results.lambda_time == 0.0, (
+            f"lambda_time should be 0.0 (uniform weights), got {results.lambda_time}"
         )
-        assert np.isinf(results.lambda_nn) or results.lambda_nn == 1e10, (
-            f"lambda_nn should be inf (stored) or 1e10 (if converted for storage)"
+        # lambda_nn should store the original inf value
+        assert np.isinf(results.lambda_nn), (
+            f"lambda_nn should be inf (original grid value), got {results.lambda_nn}"
         )
+
+    def test_inf_in_time_unit_grids_raises_valueerror(self):
+        """
+        Test that inf in lambda_time_grid or lambda_unit_grid raises ValueError.
+
+        Per Athey et al. (2025) Eq. 3, λ_time=0 and λ_unit=0 give uniform
+        weights. Using inf is a misunderstanding; only λ_nn=∞ is valid.
+        """
+        import pytest
+
+        # inf in lambda_time_grid should raise
+        with pytest.raises(ValueError, match="lambda_time_grid must not contain inf"):
+            TROP(lambda_time_grid=[np.inf])
+
+        with pytest.raises(ValueError, match="lambda_time_grid must not contain inf"):
+            TROP(lambda_time_grid=[0.0, np.inf, 1.0])
+
+        # inf in lambda_unit_grid should raise
+        with pytest.raises(ValueError, match="lambda_unit_grid must not contain inf"):
+            TROP(lambda_unit_grid=[np.inf])
+
+        with pytest.raises(ValueError, match="lambda_unit_grid must not contain inf"):
+            TROP(lambda_unit_grid=[0.5, np.inf])
+
+        # inf in lambda_nn_grid should still be valid
+        trop_est = TROP(lambda_nn_grid=[np.inf])
+        assert np.inf in trop_est.lambda_nn_grid
 
     def test_variance_estimation_uses_converted_params(self, simple_panel_data):
         """
         Test that variance estimation uses the same converted parameters as point estimation.
 
-        When infinity is in the grid and gets selected, both ATT and SE should be
-        computed with the same effective parameters (e.g., λ_time=∞ converted to 0.0).
-        This test verifies the fix for variance estimation inconsistency (PR #110 Round 7).
+        λ_nn=∞ is converted to 1e10 for computation. λ_time and λ_unit use 0.0
+        directly for uniform weights (no conversion needed).
         """
         from unittest.mock import patch
 
-        # Use grids with only infinity values to force selection
         trop_est = TROP(
-            lambda_time_grid=[np.inf],  # Will be converted to 0.0 internally
+            lambda_time_grid=[0.0],     # Uniform time weights (paper convention)
             lambda_unit_grid=[0.0],
             lambda_nn_grid=[np.inf],    # Will be converted to 1e10 internally
             n_bootstrap=5,
@@ -2210,19 +2229,20 @@ class TestLOOCVFallback:
                 time="period",
             )
 
-        # Results should store original grid values
-        assert np.isinf(results.lambda_time), "Results should store original infinity value"
-        assert np.isinf(results.lambda_nn), "Results should store original infinity value"
+        # Results should store 0.0 for time (direct value, no conversion)
+        assert results.lambda_time == 0.0, "lambda_time should be 0.0"
+        # Results should store original inf for lambda_nn
+        assert np.isinf(results.lambda_nn), "Results should store original infinity value for lambda_nn"
 
         # ATT should be finite (computed with converted params)
         assert np.isfinite(results.att), "ATT should be finite"
 
         # Variance estimation should have received converted parameters
-        # Check that bootstrap iterations used converted (non-infinite) values
+        # Check that bootstrap iterations used converted (non-infinite) λ_nn values
         for captured in captured_lambda:
             lambda_time, lambda_unit, lambda_nn = captured
-            assert not np.isinf(lambda_time), (
-                f"Bootstrap should receive converted λ_time=0.0, not {lambda_time}"
+            assert lambda_time == 0.0, (
+                f"Bootstrap should receive λ_time=0.0, got {lambda_time}"
             )
             assert not np.isinf(lambda_nn), (
                 f"Bootstrap should receive converted λ_nn=1e10, not {lambda_nn}"
@@ -2294,16 +2314,15 @@ class TestLOOCVFallback:
 
     def test_original_grid_values_stored_in_results(self, simple_panel_data):
         """
-        Test that TROPResults stores the original grid values, not converted ones.
+        Test that TROPResults stores the selected grid values correctly.
 
-        Per the design decision in PR #110 Round 7, results should store the
-        original grid values (possibly inf) so users can see what was selected,
-        while internally using converted values for computation.
+        λ_time and λ_unit store values directly (0.0 = uniform weights).
+        λ_nn stores the original inf value when factor model is disabled.
         """
         trop_est = TROP(
-            lambda_time_grid=[np.inf],  # Original value: inf
+            lambda_time_grid=[0.0],     # Uniform time weights
             lambda_unit_grid=[0.5],
-            lambda_nn_grid=[np.inf],    # Original value: inf
+            lambda_nn_grid=[np.inf],    # Factor model disabled (original: inf)
             n_bootstrap=5,
             seed=42
         )
@@ -2316,13 +2335,14 @@ class TestLOOCVFallback:
             time="period",
         )
 
-        # Results should store original grid values (inf)
-        assert np.isinf(results.lambda_time), (
-            f"results.lambda_time should be inf (original), got {results.lambda_time}"
+        # lambda_time stores selected value directly (0.0 = uniform)
+        assert results.lambda_time == 0.0, (
+            f"results.lambda_time should be 0.0, got {results.lambda_time}"
         )
         assert results.lambda_unit == 0.5, (
             f"results.lambda_unit should be 0.5, got {results.lambda_unit}"
         )
+        # lambda_nn stores original inf (converted to 1e10 only for computation)
         assert np.isinf(results.lambda_nn), (
             f"results.lambda_nn should be inf (original), got {results.lambda_nn}"
         )
@@ -2527,22 +2547,22 @@ class TestPR110FeedbackRound8:
         assert results is not None
         assert np.isfinite(results.att)
 
-    def test_infinity_grid_values_with_final_score_computation(self, simple_panel_data):
-        """Test that infinity grid values are properly converted for final score.
+    def test_mixed_grid_values_with_final_score_computation(self, simple_panel_data):
+        """Test that grid values including 0.0 (uniform) and inf (λ_nn) work for final score.
 
-        Issue 1 fix: When LOOCV selects infinity values from the grid, the
-        final score computation should use converted values (0.0 or 1e10),
-        not raw infinity.
+        When LOOCV selects λ_nn=∞, the final score computation should use
+        converted value (1e10), not raw infinity. λ_time and λ_unit grids
+        use finite values only (0.0 = uniform weights per Eq. 3).
         """
         trop_est = TROP(
-            lambda_time_grid=[np.inf, 0.5],  # inf should convert to 0.0
-            lambda_unit_grid=[np.inf, 0.5],  # inf should convert to 0.0
+            lambda_time_grid=[0.0, 0.5],     # 0.0 = uniform time weights
+            lambda_unit_grid=[0.0, 0.5],     # 0.0 = uniform unit weights
             lambda_nn_grid=[np.inf, 0.1],    # inf should convert to 1e10
             n_bootstrap=5,
             seed=42
         )
 
-        # This should complete without error, even if inf values are selected
+        # This should complete without error
         results = trop_est.fit(
             simple_panel_data,
             outcome="outcome",
@@ -2552,11 +2572,10 @@ class TestPR110FeedbackRound8:
         )
 
         # ATT should be finite regardless of which grid values were selected
-        assert np.isfinite(results.att), "ATT should be finite with inf grid values"
+        assert np.isfinite(results.att), "ATT should be finite with mixed grid values"
         assert results.se >= 0, "SE should be non-negative"
 
-        # If inf values were selected, LOOCV score should still be computed correctly
-        # (using converted values, not raw inf)
+        # If inf was selected for λ_nn, LOOCV score should still be computed correctly
         if np.isinf(results.loocv_score):
             # Infinite LOOCV score is acceptable (means fits failed)
             # but ATT should still be finite (falls back to defaults)

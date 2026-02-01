@@ -45,8 +45,10 @@ from diff_diff.results import _get_significance_stars
 from diff_diff.utils import compute_confidence_interval, compute_p_value
 
 
-# Sentinel value for "disabled" mode in LOOCV parameter search
-# Following paper's footnote 2: λ=∞ disables the corresponding component
+# Sentinel value for "disabled" λ_nn in LOOCV parameter search.
+# Per paper's footnote 2: λ_nn=∞ disables the factor model (L=0).
+# For λ_time and λ_unit, 0.0 means disabled (uniform weights) per Eq. 3:
+#   exp(-0 × dist) = 1 for all distances.
 _LAMBDA_INF: float = float('inf')
 
 
@@ -116,15 +118,14 @@ class TROPResults:
     treatment_effects : dict
         Individual treatment effects for each treated (unit, time) pair.
     lambda_time : float
-        Selected time weight decay parameter from grid. Note: infinity values
-        are converted internally (∞ → 0.0 for uniform weights) for computation.
+        Selected time weight decay parameter from grid. 0.0 = uniform time
+        weights (disabled) per Eq. 3.
     lambda_unit : float
-        Selected unit weight decay parameter from grid. Note: infinity values
-        are converted internally (∞ → 0.0 for uniform weights) for computation.
+        Selected unit weight decay parameter from grid. 0.0 = uniform unit
+        weights (disabled) per Eq. 3.
     lambda_nn : float
-        Selected nuclear norm regularization parameter from grid. Note: infinity
-        values are converted internally (∞ → 1e10, factor model disabled) for
-        computation.
+        Selected nuclear norm regularization parameter from grid. inf = factor
+        model disabled (L=0); converted to 1e10 internally for computation.
     factor_matrix : np.ndarray
         Estimated low-rank factor matrix L (n_periods x n_units).
     effective_rank : float
@@ -382,11 +383,14 @@ class TROP:
           penalty is finite.
 
     lambda_time_grid : list, optional
-        Grid of time weight decay parameters. Default: [0, 0.1, 0.5, 1, 2, 5].
+        Grid of time weight decay parameters. 0.0 = uniform weights (disabled).
+        Must not contain inf. Default: [0, 0.1, 0.5, 1, 2, 5].
     lambda_unit_grid : list, optional
-        Grid of unit weight decay parameters. Default: [0, 0.1, 0.5, 1, 2, 5].
+        Grid of unit weight decay parameters. 0.0 = uniform weights (disabled).
+        Must not contain inf. Default: [0, 0.1, 0.5, 1, 2, 5].
     lambda_nn_grid : list, optional
-        Grid of nuclear norm regularization parameters. Default: [0, 0.01, 0.1, 1].
+        Grid of nuclear norm regularization parameters. inf = factor model
+        disabled (L=0). Default: [0, 0.01, 0.1, 1].
     max_iter : int, default=100
         Maximum iterations for nuclear norm optimization.
     tol : float, default=1e-6
@@ -490,6 +494,21 @@ class TROP:
                 f"variance_method must be one of {valid_variance_methods}, "
                 f"got '{variance_method}'"
             )
+
+        # Validate that time/unit grids do not contain inf.
+        # Per Athey et al. (2025) Eq. 3, λ_time=0 and λ_unit=0 give uniform
+        # weights (exp(-0 × dist) = 1). Using inf is a misunderstanding of
+        # the paper's convention. Only λ_nn=∞ is valid (disables factor model).
+        for grid_name, grid_vals in [
+            ("lambda_time_grid", self.lambda_time_grid),
+            ("lambda_unit_grid", self.lambda_unit_grid),
+        ]:
+            if any(np.isinf(v) for v in grid_vals):
+                raise ValueError(
+                    f"{grid_name} must not contain inf. Use 0.0 for uniform "
+                    f"weights (disabled) per Athey et al. (2025) Eq. 3: "
+                    f"exp(-0 × dist) = 1 for all distances."
+                )
 
         # Internal state
         self.results_: Optional[TROPResults] = None
@@ -708,10 +727,11 @@ class TROP:
 
         Following paper's footnote 2, this performs a univariate grid search
         for one tuning parameter while holding others fixed. The fixed_params
-        can include _LAMBDA_INF values to disable specific components:
+        use 0.0 for disabled time/unit weights and _LAMBDA_INF for disabled
+        factor model:
         - lambda_nn = inf: Skip nuclear norm regularization (L=0)
-        - lambda_time = inf: Uniform time weights (treated as 0)
-        - lambda_unit = inf: Uniform unit weights (treated as 0)
+        - lambda_time = 0.0: Uniform time weights (exp(-0×dist)=1)
+        - lambda_unit = 0.0: Uniform unit weights (exp(-0×dist)=1)
 
         Parameters
         ----------
@@ -732,7 +752,7 @@ class TROP:
         grid : List[float]
             Grid of values to search over.
         fixed_params : Dict[str, float]
-            Fixed values for other parameters. May include _LAMBDA_INF.
+            Fixed values for other parameters. May include _LAMBDA_INF for lambda_nn.
 
         Returns
         -------
@@ -745,22 +765,14 @@ class TROP:
         for value in grid:
             params = {**fixed_params, param_name: value}
 
-            # Convert inf values to 0 for computation (inf means "disabled" = uniform weights)
             lambda_time = params.get('lambda_time', 0.0)
             lambda_unit = params.get('lambda_unit', 0.0)
             lambda_nn = params.get('lambda_nn', 0.0)
 
-            # Handle infinity as "disabled" mode
-            # Per paper Equations 2-3:
-            # - λ_time/λ_unit=∞ → exp(-∞×dist)→0 for dist>0, uniform weights → use 0.0
-            # - λ_nn=∞ → infinite penalty → L≈0 (factor model disabled) → use 1e10
-            # Note: λ_nn=0 means NO regularization (full-rank L), opposite of "disabled"
-            if np.isinf(lambda_time):
-                lambda_time = 0.0  # Uniform time weights
-            if np.isinf(lambda_unit):
-                lambda_unit = 0.0  # Uniform unit weights
+            # Convert λ_nn=∞ → large finite value (factor model disabled, L≈0)
+            # λ_time and λ_unit use 0.0 for uniform weights per Eq. 3 (no inf conversion needed)
             if np.isinf(lambda_nn):
-                lambda_nn = 1e10  # Very large → L≈0 (factor model disabled)
+                lambda_nn = 1e10
 
             try:
                 score = self._loocv_score_obs_specific(
@@ -1423,9 +1435,9 @@ class TROP:
             for lambda_time_val in self.lambda_time_grid:
                 for lambda_unit_val in self.lambda_unit_grid:
                     for lambda_nn_val in self.lambda_nn_grid:
-                        # Convert infinity values
-                        lt = 0.0 if np.isinf(lambda_time_val) else lambda_time_val
-                        lu = 0.0 if np.isinf(lambda_unit_val) else lambda_unit_val
+                        # Convert λ_nn=∞ → large finite value (factor model disabled)
+                        lt = lambda_time_val
+                        lu = lambda_unit_val
                         ln = 1e10 if np.isinf(lambda_nn_val) else lambda_nn_val
 
                         try:
@@ -1451,13 +1463,10 @@ class TROP:
 
         # Final estimation with best parameters
         lambda_time, lambda_unit, lambda_nn = best_lambda
-        original_lambda_time, original_lambda_unit, original_lambda_nn = best_lambda
+        original_lambda_nn = lambda_nn
 
-        # Convert infinity values for computation
-        if np.isinf(lambda_time):
-            lambda_time = 0.0
-        if np.isinf(lambda_unit):
-            lambda_unit = 0.0
+        # Convert λ_nn=∞ → large finite value (factor model disabled, L≈0)
+        # λ_time and λ_unit use 0.0 for uniform weights directly (no conversion needed)
         if np.isinf(lambda_nn):
             lambda_nn = 1e10
 
@@ -1535,8 +1544,8 @@ class TROP:
             unit_effects=unit_effects_dict,
             time_effects=time_effects_dict,
             treatment_effects=treatment_effects,
-            lambda_time=original_lambda_time,
-            lambda_unit=original_lambda_unit,
+            lambda_time=lambda_time,
+            lambda_unit=lambda_unit,
             lambda_nn=original_lambda_nn,
             factor_matrix=L,
             effective_rank=effective_rank,
@@ -1866,9 +1875,9 @@ class TROP:
         TROPResults
             Object containing the ATT estimate, standard error,
             factor estimates, and tuning parameters. The lambda_*
-            attributes show the selected grid values. Infinity values
-            (∞) are converted internally: λ_time/λ_unit=∞ → 0.0 (uniform
-            weights), λ_nn=∞ → 1e10 (factor model disabled).
+            attributes show the selected grid values. For λ_time and
+            λ_unit, 0.0 means uniform weights; inf is not accepted.
+            For λ_nn, ∞ is converted to 1e10 (factor model disabled).
         """
         # Validate inputs
         required_cols = [outcome, treatment, unit, time]
@@ -2053,11 +2062,11 @@ class TROP:
                 {'lambda_unit': 0.0, 'lambda_nn': _LAMBDA_INF}
             )
 
-            # λ_nn search: fix λ_time=∞ (uniform time weights), λ_unit=0
+            # λ_nn search: fix λ_time=0 (uniform time weights), λ_unit=0
             lambda_nn_init, _ = self._univariate_loocv_search(
                 Y, D, control_mask, control_unit_idx, n_units, n_periods,
                 'lambda_nn', self.lambda_nn_grid,
-                {'lambda_time': _LAMBDA_INF, 'lambda_unit': 0.0}
+                {'lambda_time': 0.0, 'lambda_unit': 0.0}
             )
 
             # λ_unit search: fix λ_nn=∞, λ_time=0
@@ -2099,24 +2108,16 @@ class TROP:
         self._optimal_lambda = best_lambda
         lambda_time, lambda_unit, lambda_nn = best_lambda
 
-        # Convert infinity values for final estimation (matching LOOCV conversion)
-        # This ensures final estimation uses the same effective parameters that LOOCV evaluated.
-        # See REGISTRY.md "λ=∞ implementation" for rationale.
-        #
-        # IMPORTANT: Store original grid values for results, use converted for computation.
-        # This lets users see what was selected from their grid, while ensuring consistent
-        # behavior between point estimation and variance estimation.
-        original_lambda_time, original_lambda_unit, original_lambda_nn = best_lambda
+        # Store original λ_nn for results (only λ_nn needs original→effective conversion).
+        # λ_time and λ_unit use 0.0 for uniform weights directly per Eq. 3.
+        original_lambda_nn = lambda_nn
 
-        if np.isinf(lambda_time):
-            lambda_time = 0.0  # Uniform time weights
-        if np.isinf(lambda_unit):
-            lambda_unit = 0.0  # Uniform unit weights
+        # Convert λ_nn=∞ → large finite value (factor model disabled, L≈0)
         if np.isinf(lambda_nn):
-            lambda_nn = 1e10  # Very large → L≈0 (factor model disabled)
+            lambda_nn = 1e10
 
-        # Create effective_lambda with converted values for ALL downstream computation
-        # This ensures variance estimation uses the same parameters as point estimation
+        # effective_lambda with converted λ_nn for ALL downstream computation
+        # (variance estimation uses the same parameters as point estimation)
         effective_lambda = (lambda_time, lambda_unit, lambda_nn)
 
         # Step 2: Final estimation - per-observation model fitting following Algorithm 2
@@ -2214,10 +2215,8 @@ class TROP:
             unit_effects=unit_effects_dict,
             time_effects=time_effects_dict,
             treatment_effects=treatment_effects,
-            # Store ORIGINAL grid values (possibly inf) so users see what was selected.
-            # Internally, infinity values are converted for computation (see effective_lambda).
-            lambda_time=original_lambda_time,
-            lambda_unit=original_lambda_unit,
+            lambda_time=lambda_time,
+            lambda_unit=lambda_unit,
             lambda_nn=original_lambda_nn,
             factor_matrix=L_hat,
             effective_rank=effective_rank,

@@ -158,9 +158,9 @@ fn compute_pair_distance(
 /// * `time_dist` - Time distance matrix
 /// * `control_obs` - List of control observations for LOOCV
 /// * `grid` - Grid of values to search
-/// * `fixed_time` - Fixed lambda_time (inf for disabled)
-/// * `fixed_unit` - Fixed lambda_unit (inf for disabled)
-/// * `fixed_nn` - Fixed lambda_nn (inf for disabled)
+/// * `fixed_time` - Fixed lambda_time (0.0 for uniform weights)
+/// * `fixed_unit` - Fixed lambda_unit (0.0 for uniform weights)
+/// * `fixed_nn` - Fixed lambda_nn (inf to disable factor model)
 /// * `param_type` - Which parameter to search: 0=time, 1=unit, 2=nn
 /// * `max_iter` - Maximum iterations
 /// * `tol` - Convergence tolerance
@@ -188,34 +188,26 @@ fn univariate_loocv_search(
     let results: Vec<(f64, f64)> = grid
         .par_iter()
         .map(|&value| {
-            // Set parameters, converting inf for "disabled" mode
-            // Per paper Equations 2-3:
-            // - λ_time/λ_unit=∞ → uniform weights → use 0.0
-            // - λ_nn=∞ → infinite penalty → L≈0 (factor model disabled) → use 1e10
-            // Note: λ_nn=0 means NO regularization (full-rank L), opposite of "disabled"
-            //
-            // IMPORTANT: Convert the grid value BEFORE using it, matching Python behavior.
-            // This ensures Rust and Python evaluate the same objective for infinity grids.
+            // Convert λ_nn=∞ → 1e10 (factor model disabled, L≈0).
+            // λ_time and λ_unit use 0.0 for uniform weights per Eq. 3 (no inf conversion).
             let (lambda_time, lambda_unit, lambda_nn) = match param_type {
                 0 => {
-                    // Searching λ_time: convert grid value if infinite
-                    let value_converted = if value.is_infinite() { 0.0 } else { value };
-                    (value_converted,
-                     if fixed_unit.is_infinite() { 0.0 } else { fixed_unit },
+                    // Searching λ_time: use grid value directly (no inf expected)
+                    (value,
+                     fixed_unit,
                      if fixed_nn.is_infinite() { 1e10 } else { fixed_nn })
                 },
                 1 => {
-                    // Searching λ_unit: convert grid value if infinite
-                    let value_converted = if value.is_infinite() { 0.0 } else { value };
-                    (if fixed_time.is_infinite() { 0.0 } else { fixed_time },
-                     value_converted,
+                    // Searching λ_unit: use grid value directly (no inf expected)
+                    (fixed_time,
+                     value,
                      if fixed_nn.is_infinite() { 1e10 } else { fixed_nn })
                 },
                 _ => {
-                    // Searching λ_nn: convert grid value if infinite
+                    // Searching λ_nn: convert inf → 1e10 (factor model disabled)
                     let value_converted = if value.is_infinite() { 1e10 } else { value };
-                    (if fixed_time.is_infinite() { 0.0 } else { fixed_time },
-                     if fixed_unit.is_infinite() { 0.0 } else { fixed_unit },
+                    (fixed_time,
+                     fixed_unit,
                      value_converted)
                 },
             };
@@ -347,6 +339,23 @@ pub fn loocv_grid_search<'py>(
     let lambda_unit_vec: Vec<f64> = lambda_unit_grid.as_array().to_vec();
     let lambda_nn_vec: Vec<f64> = lambda_nn_grid.as_array().to_vec();
 
+    // Validate: lambda_time_grid and lambda_unit_grid must not contain inf.
+    // Per Athey et al. (2025) Eq. 3: use 0.0 for uniform weights, not inf.
+    for &v in &lambda_time_vec {
+        if v.is_infinite() {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "lambda_time_grid must not contain inf. Use 0.0 for uniform weights (disabled) per Athey et al. (2025) Eq. 3."
+            ));
+        }
+    }
+    for &v in &lambda_unit_vec {
+        if v.is_infinite() {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "lambda_unit_grid must not contain inf. Use 0.0 for uniform weights (disabled) per Athey et al. (2025) Eq. 3."
+            ));
+        }
+    }
+
     // Get control observations for LOOCV
     let control_obs = get_control_observations(
         &y_arr,
@@ -364,10 +373,10 @@ pub fn loocv_grid_search<'py>(
         &lambda_time_vec, 0.0, 0.0, f64::INFINITY, 0, max_iter, tol,
     );
 
-    // λ_nn search: fix λ_time=∞ (disabled), λ_unit=0
+    // λ_nn search: fix λ_time=0 (uniform time weights), λ_unit=0
     let (lambda_nn_init, _) = univariate_loocv_search(
         &y_arr, &d_arr, &control_mask_arr, &time_dist_arr, &control_obs,
-        &lambda_nn_vec, f64::INFINITY, 0.0, 0.0, 2, max_iter, tol,
+        &lambda_nn_vec, 0.0, 0.0, 0.0, 2, max_iter, tol,
     );
 
     // λ_unit search: fix λ_nn=∞, λ_time=0
@@ -384,13 +393,9 @@ pub fn loocv_grid_search<'py>(
         max_iter, tol, 10,
     );
 
-    // Convert infinity values BEFORE computing final score (Issue 1 fix)
-    // Per paper Equations 2-3:
-    // - λ_time/λ_unit=∞ → uniform weights → use 0.0
-    // - λ_nn=∞ → infinite penalty → L≈0 (factor model disabled) → use 1e10
-    // This ensures final score computation matches what LOOCV evaluated.
-    let best_time_eff = if best_time.is_infinite() { 0.0 } else { best_time };
-    let best_unit_eff = if best_unit.is_infinite() { 0.0 } else { best_unit };
+    // Convert λ_nn=∞ → 1e10 for final score computation (factor model disabled)
+    let best_time_eff = best_time;
+    let best_unit_eff = best_unit;
     let best_nn_eff = if best_nn.is_infinite() { 1e10 } else { best_nn };
 
     // Compute final score with converted values
@@ -1489,6 +1494,23 @@ pub fn loocv_grid_search_joint<'py>(
     let lambda_unit_vec: Vec<f64> = lambda_unit_grid.as_array().to_vec();
     let lambda_nn_vec: Vec<f64> = lambda_nn_grid.as_array().to_vec();
 
+    // Validate: lambda_time_grid and lambda_unit_grid must not contain inf.
+    // Per Athey et al. (2025) Eq. 3: use 0.0 for uniform weights, not inf.
+    for &v in &lambda_time_vec {
+        if v.is_infinite() {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "lambda_time_grid must not contain inf. Use 0.0 for uniform weights (disabled) per Athey et al. (2025) Eq. 3."
+            ));
+        }
+    }
+    for &v in &lambda_unit_vec {
+        if v.is_infinite() {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "lambda_unit_grid must not contain inf. Use 0.0 for uniform weights (disabled) per Athey et al. (2025) Eq. 3."
+            ));
+        }
+    }
+
     let n_periods = y_arr.nrows();
     let n_units = y_arr.ncols();
 
@@ -1522,9 +1544,9 @@ pub fn loocv_grid_search_joint<'py>(
     let results: Vec<(f64, f64, f64, f64, usize, Option<(usize, usize)>)> = grid_combinations
         .into_par_iter()
         .map(|(lt, lu, ln)| {
-            // Convert infinity values
-            let lt_eff = if lt.is_infinite() { 0.0 } else { lt };
-            let lu_eff = if lu.is_infinite() { 0.0 } else { lu };
+            // Convert λ_nn=∞ → 1e10 (factor model disabled)
+            let lt_eff = lt;
+            let lu_eff = lu;
             let ln_eff = if ln.is_infinite() { 1e10 } else { ln };
 
             let (score, n_valid, first_failed) = loocv_score_joint(
@@ -1629,9 +1651,9 @@ pub fn bootstrap_trop_variance_joint<'py>(
     }
     let treated_periods = n_periods.saturating_sub(first_treat_period);
 
-    // Convert infinity values for computation
-    let lt_eff = if lambda_time.is_infinite() { 0.0 } else { lambda_time };
-    let lu_eff = if lambda_unit.is_infinite() { 0.0 } else { lambda_unit };
+    // Convert λ_nn=∞ → 1e10 (factor model disabled)
+    let lt_eff = lambda_time;
+    let lu_eff = lambda_unit;
     let ln_eff = if lambda_nn.is_infinite() { 1e10 } else { lambda_nn };
 
     // Run bootstrap iterations in parallel

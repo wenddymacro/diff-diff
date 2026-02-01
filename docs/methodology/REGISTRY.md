@@ -488,30 +488,40 @@ has D=1), ATT will be incorrect - document this clearly.
 - No separate "post_periods" concept - D matrix is the sole input for treatment timing
 - Supports general assignment patterns including staggered adoption
 
-*Estimator equation (as implemented):*
+*Estimator equation (as implemented, Section 2.2):*
 
-Factor model:
+Working model (separating unit/time FE from regularized factor component):
 ```
-Y_it = L_it + τ D_it + ε_it
+Y_it(0) = α_i + β_t + L_it + ε_it,   E[ε_it | L] = 0
 ```
-where L = UΣV' is low-rank factor structure.
+where α_i are unit fixed effects, β_t are time fixed effects, and L = UΣV' is a low-rank
+factor structure. The FE are estimated separately from L because L is regularized but
+the fixed effects are not.
 
-Factor estimation via nuclear norm regularization:
+Optimization (Equation 2):
 ```
-L̂ = argmin_L ||Y_control - L||_F² + λ_nn ||L||_*
+(α̂, β̂, L̂) = argmin_{α,β,L} Σ_j Σ_s θ_s^{i,t} ω_j^{i,t} (1-W_js)(Y_js - α_j - β_s - L_js)² + λ_nn ||L||_*
 ```
-Solved via soft-thresholding of singular values:
+Solved via alternating minimization with soft-thresholding of singular values for L:
 ```
 L̂ = U × soft_threshold(Σ, λ_nn) × V'
 ```
 
-Unit weights:
+Per-observation weights (Equation 3):
 ```
-ω_j = exp(-λ_unit × d(j, treated)) / Σ_k exp(-λ_unit × d(k, treated))
-```
-where d(j, treated) is RMSE distance to treated units in pre-period.
+θ_s^{i,t}(λ) = exp(-λ_time × |t - s|)
 
-Time weights: analogous construction for periods.
+ω_j^{i,t}(λ) = exp(-λ_unit × dist^unit_{-t}(j, i))
+
+dist^unit_{-t}(j, i) = (Σ_u 1{u≠t}(1-W_iu)(1-W_ju)(Y_iu - Y_ju)² / Σ_u 1{u≠t}(1-W_iu)(1-W_ju))^{1/2}
+```
+Note: weights are per-(i,t) observation-specific. The distance formula excludes the
+target period t and uses only periods where both units are untreated (W=0).
+
+*Special cases (Section 2.2):*
+- λ_nn=∞, ω_j=θ_s=1 (uniform weights) → recovers DID/TWFE
+- ω_j=θ_s=1, λ_nn<∞ → recovers Matrix Completion (Athey et al. 2021)
+- λ_nn=∞ with specific ω_j, θ_s → recovers SC/SDID
 
 *LOOCV tuning parameter selection (Equation 5, Footnote 2):*
 ```
@@ -521,13 +531,15 @@ Q(λ) = Σ_{j,s: D_js=0} [τ̂_js^loocv(λ)]²
 - **Two-stage procedure** (per paper's footnote 2):
   - Stage 1: Univariate grid searches with extreme fixed values
     - λ_time search: fix λ_unit=0, λ_nn=∞ (disabled)
-    - λ_nn search: fix λ_time=∞ (uniform time weights), λ_unit=0
+    - λ_nn search: fix λ_time=0 (uniform time weights), λ_unit=0
     - λ_unit search: fix λ_nn=∞, λ_time=0
   - Stage 2: Cycling (coordinate descent) until convergence
-- **"Disabled" parameter semantics** (per paper Equations 2-3):
-  - `λ_time=∞` or `λ_unit=∞`: Converts to `0.0` internally → exp(-0×dist)=1 → uniform weights
-  - `λ_nn=∞`: Converts to `1e10` internally → very large penalty → L≈0 (factor model off, recovers DID/TWFE)
+- **"Disabled" parameter semantics** (per paper Section 4.3, Table 5, Footnote 2):
+  - `λ_time=0`: Uniform time weights (disabled), because exp(-0 × dist) = 1
+  - `λ_unit=0`: Uniform unit weights (disabled), because exp(-0 × dist) = 1
+  - `λ_nn=∞`: Factor model disabled (L=0), because infinite penalty; converted to `1e10` internally
   - **Note**: `λ_nn=0` means NO regularization (full-rank L), which is the OPPOSITE of "disabled"
+  - **Validation**: `lambda_time_grid` and `lambda_unit_grid` must not contain inf. A `ValueError` is raised if they do, guiding users to use 0.0 for uniform weights per Eq. 3.
 - **Subsampling**: max_loocv_samples (default 100) for computational tractability
   - This subsamples control observations, NOT parameter combinations
   - Increases precision at cost of computation; increase for more precise tuning
@@ -538,21 +550,20 @@ Q(λ) = Σ_{j,s: D_js=0} [τ̂_js^loocv(λ)]²
   - This ensures λ selection only considers fully estimable combinations
 
 *Standard errors:*
-- Default: Block bootstrap preserving panel structure
-- Alternative: Jackknife (leave-one-unit-out)
+- Default: Block bootstrap preserving panel structure (Algorithm 3)
+- Alternative: Jackknife (leave-one-unit-out) — **implementation addition** not described in the paper
 
 *Edge cases:*
 - Rank selection: automatic via cross-validation, information criterion, or elbow
 - Zero singular values: handled by soft-thresholding
 - Extreme distances: weights regularized to prevent degeneracy
 - LOOCV fit failures: returns Q(λ) = ∞ on first failure (per Equation 5 requirement that Q sums over ALL D==0 cells); if all parameter combinations fail, falls back to defaults (1.0, 1.0, 0.1)
-- **λ=∞ implementation**: Infinity values are converted in both LOOCV search and final estimation:
-  - λ_time=∞ or λ_unit=∞ → 0.0 (uniform weights via exp(-0×d)=1)
+- **λ_nn=∞ implementation**: Only λ_nn uses infinity (converted to 1e10 for computation):
   - λ_nn=∞ → 1e10 (large penalty → L≈0, factor model disabled)
   - Conversion applied to grid values during LOOCV (including Rust backend)
   - Conversion applied to selected values for point estimation
   - Conversion applied to selected values for variance estimation (ensures SE matches ATT)
-  - **Results storage**: `TROPResults` stores *original* grid values (e.g., inf), while computations use converted values. This lets users see what was selected from their grid.
+  - **Results storage**: `TROPResults` stores *original* λ_nn value (inf), while computations use 1e10. λ_time and λ_unit store their selected values directly (0.0 = uniform).
 - **Empty control observations**: If LOOCV control observations become empty (edge case during subsampling), returns Q(λ) = ∞ with warning. A score of 0.0 would incorrectly "win" over legitimate parameters.
 - **Infinite LOOCV score handling**: If best LOOCV score is infinite, `best_lambda` is set to None, triggering defaults fallback
 - Validation: requires at least 2 periods before first treatment
@@ -572,7 +583,7 @@ Q(λ) = Σ_{j,s: D_js=0} [τ̂_js^loocv(λ)]²
 
 **Requirements checklist:**
 - [x] Factor matrix estimated via soft-threshold SVD
-- [x] Unit weights: `exp(-λ_unit × distance)` with normalization
+- [x] Unit weights: `exp(-λ_unit × distance)` (unnormalized, matching Eq. 2)
 - [x] LOOCV implemented for tuning parameter selection
 - [x] LOOCV uses SUM of squared errors per Equation 5
 - [x] Multiple rank selection methods: cv, ic, elbow
