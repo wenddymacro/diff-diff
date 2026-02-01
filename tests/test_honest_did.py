@@ -945,6 +945,104 @@ class TestEdgeCases:
         with pytest.raises(ValueError, match="No pre-period effects with finite"):
             _extract_event_study_params(results)
 
+    def test_honest_did_all_post_nan_raises(self):
+        """HonestDiD should raise ValueError when all post-period effects are NaN.
+
+        When MultiPeriodDiD produces NaN for all post-period effects (e.g. from
+        severe rank deficiency), HonestDiD.fit() should raise rather than
+        silently computing with an empty weight vector.
+        """
+        period_effects = {
+            0: PeriodEffect(
+                period=0,
+                effect=0.1,
+                se=0.3,
+                t_stat=0.33,
+                p_value=0.74,
+                conf_int=(-0.49, 0.69),
+            ),
+            # Reference period (1) omitted
+            2: PeriodEffect(
+                period=2,
+                effect=np.nan,
+                se=np.nan,
+                t_stat=np.nan,
+                p_value=np.nan,
+                conf_int=(np.nan, np.nan),
+            ),
+            3: PeriodEffect(
+                period=3,
+                effect=np.nan,
+                se=np.nan,
+                t_stat=np.nan,
+                p_value=np.nan,
+                conf_int=(np.nan, np.nan),
+            ),
+        }
+
+        interaction_indices = {0: 0, 2: 1, 3: 2}
+        vcov = np.full((3, 3), 0.0)
+        vcov[0, 0] = 0.09
+        vcov[1, :] = np.nan
+        vcov[:, 1] = np.nan
+        vcov[2, :] = np.nan
+        vcov[:, 2] = np.nan
+
+        results = MultiPeriodDiDResults(
+            period_effects=period_effects,
+            avg_att=np.nan,
+            avg_se=np.nan,
+            avg_t_stat=np.nan,
+            avg_p_value=np.nan,
+            avg_conf_int=(np.nan, np.nan),
+            n_obs=300,
+            n_treated=150,
+            n_control=150,
+            pre_periods=[0, 1],
+            post_periods=[2, 3],
+            vcov=vcov,
+            reference_period=1,
+            interaction_indices=interaction_indices,
+        )
+
+        honest = HonestDiD(method="relative_magnitude", M=1.0)
+        with pytest.raises(ValueError, match="No post-period effects with finite"):
+            honest.fit(results)
+
+    def test_honest_did_cs_all_post_nan_raises(self):
+        """HonestDiD should raise ValueError when all CS post-period effects have NaN SEs.
+
+        When CallawaySantAnnaResults has non-finite SEs for all t>=0 event-study
+        effects, HonestDiD.fit() should raise rather than computing with empty
+        post-period arrays.
+        """
+        from diff_diff.staggered_results import CallawaySantAnnaResults
+
+        # Create CS results with valid pre-periods but NaN SEs in post-periods
+        cs_results = CallawaySantAnnaResults(
+            group_time_effects={},
+            overall_att=np.nan,
+            overall_se=np.nan,
+            overall_t_stat=np.nan,
+            overall_p_value=np.nan,
+            overall_conf_int=(np.nan, np.nan),
+            groups=[2004],
+            time_periods=[2000, 2001, 2002, 2003],
+            n_obs=400,
+            n_treated_units=200,
+            n_control_units=200,
+        )
+        cs_results.event_study_effects = {
+            -2: {"effect": 0.1, "se": 0.3, "n_groups": 2},
+            -1: {"effect": 0.05, "se": 0.25, "n_groups": 2},
+            0: {"effect": 2.0, "se": np.nan, "n_groups": 0},
+            1: {"effect": 2.5, "se": np.nan, "n_groups": 0},
+        }
+
+        honest = HonestDiD(method="relative_magnitude", M=1.0)
+        with pytest.raises(ValueError, match="No post-period effects with finite"):
+            honest.fit(cs_results)
+
 
 # =============================================================================
 # Tests for Visualization (without matplotlib)

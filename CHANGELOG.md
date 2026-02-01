@@ -36,8 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The `variance_method` field has also been removed from `TROPResults`.
 
 ### Fixed
-- HonestDiD: filter non-finite pre-period effects from MultiPeriodDiD results
-  (prevents NaN propagation into sensitivity bounds)
+- HonestDiD: filter non-finite period effects from MultiPeriodDiD results
+  (prevents NaN propagation into sensitivity bounds; raises ValueError
+  when no finite pre- or post-period effects remain)
 - HonestDiD VCV extraction: now uses interaction sub-VCV instead of full regression VCV
   (via `interaction_indices` period → column index mapping)
 

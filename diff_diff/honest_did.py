@@ -1111,6 +1111,13 @@ class HonestDiD:
         # Update num_post to match actual data
         num_post = len(beta_post)
 
+        if num_post == 0:
+            raise ValueError(
+                "No post-period effects with finite estimates found. "
+                "HonestDiD requires at least one identified post-period "
+                "coefficient to compute bounds."
+            )
+
         # Set up weighting vector
         if self.l_vec is None:
             l_vec = np.ones(num_post) / num_post  # Uniform weights
