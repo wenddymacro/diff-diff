@@ -47,6 +47,8 @@ Read the project's `CLAUDE.md` file to understand:
 - Test structure and conventions
 - Design patterns (sklearn-like API, formula interface, results objects, etc.)
 
+If the plan modifies estimator math, standard error formulas, inference logic, or edge-case handling, also read `docs/methodology/REGISTRY.md` to understand the academic foundations and reference implementations for the affected estimator(s).
+
 ### Step 3: Read Referenced Files
 
 Identify all files the plan references (file paths, module names, class names). Then read them to validate the plan's assumptions:
