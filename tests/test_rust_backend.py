@@ -973,7 +973,7 @@ class TestTROPRustBackend:
         best_lt, best_lu, best_ln, score, n_valid, n_attempted, first_failed = loocv_grid_search(
             Y, D, control_mask, time_dist,
             lambda_time, lambda_unit, lambda_nn,
-            50, 100, 1e-6, 42
+            100, 1e-6,
         )
 
         # Check returned parameters are from the grid
@@ -1108,7 +1108,6 @@ class TestTROPRustVsNumpy:
             lambda_unit_grid=[0.0, 1.0],
             lambda_nn_grid=[0.0, 0.1],
             n_bootstrap=20,
-            max_loocv_samples=30,
             seed=42
         )
         results = trop.fit(df, 'outcome', 'treated', 'unit', 'time')
@@ -1160,7 +1159,7 @@ class TestTROPJointRustBackend:
         result = loocv_grid_search_joint(
             Y, D, control_mask,
             lambda_time_grid, lambda_unit_grid, lambda_nn_grid,
-            50, 100, 1e-6, 42
+            100, 1e-6,
         )
 
         best_lt, best_lu, best_ln, best_score, n_valid, n_attempted, _ = result
@@ -1177,7 +1176,7 @@ class TestTROPJointRustBackend:
         assert best_score >= 0 or np.isinf(best_score)
 
     def test_loocv_grid_search_joint_reproducible(self):
-        """Test loocv_grid_search_joint is reproducible with same seed."""
+        """Test loocv_grid_search_joint is deterministic (no subsampling)."""
         from diff_diff._rust_backend import loocv_grid_search_joint
 
         np.random.seed(42)
@@ -1197,15 +1196,15 @@ class TestTROPJointRustBackend:
         result1 = loocv_grid_search_joint(
             Y, D, control_mask,
             lambda_time_grid, lambda_unit_grid, lambda_nn_grid,
-            30, 50, 1e-6, 42
+            50, 1e-6,
         )
         result2 = loocv_grid_search_joint(
             Y, D, control_mask,
             lambda_time_grid, lambda_unit_grid, lambda_nn_grid,
-            30, 50, 1e-6, 42
+            50, 1e-6,
         )
 
-        # Same seed should produce same results
+        # Without subsampling, results should be deterministic
         assert result1[:4] == result2[:4]
 
     def test_bootstrap_trop_variance_joint_shape(self):

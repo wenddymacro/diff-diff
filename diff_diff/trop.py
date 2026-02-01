@@ -394,11 +394,6 @@ class TROP:
         Significance level for confidence intervals.
     n_bootstrap : int, default=200
         Number of bootstrap replications for variance estimation.
-    max_loocv_samples : int, default=100
-        Maximum control observations to use in LOOCV for tuning parameter
-        selection. Subsampling is used for computational tractability as
-        noted in the paper. Increase for more precise tuning at the cost
-        of computational time.
     seed : int, optional
         Random seed for reproducibility.
 
@@ -429,15 +424,6 @@ class TROP:
     """
 
     # Class constants
-    DEFAULT_LOOCV_MAX_SAMPLES: int = 100
-    """Maximum control observations to use in LOOCV (for computational tractability).
-
-    As noted in the paper's footnote, LOOCV is subsampled for computational
-    tractability. This constant controls the maximum number of control observations
-    used in each LOOCV evaluation. Increase for more precise tuning at the cost
-    of computational time.
-    """
-
     CONVERGENCE_TOL_SVD: float = 1e-10
     """Tolerance for singular value truncation in soft-thresholding.
 
@@ -455,7 +441,6 @@ class TROP:
         tol: float = 1e-6,
         alpha: float = 0.05,
         n_bootstrap: int = 200,
-        max_loocv_samples: int = 100,
         seed: Optional[int] = None,
     ):
         # Validate method parameter
@@ -475,7 +460,6 @@ class TROP:
         self.tol = tol
         self.alpha = alpha
         self.n_bootstrap = n_bootstrap
-        self.max_loocv_samples = max_loocv_samples
         self.seed = seed
 
         # Validate that time/unit grids do not contain inf.
@@ -1359,8 +1343,7 @@ class TROP:
                 result = _rust_loocv_grid_search_joint(
                     Y, D.astype(np.float64), control_mask_u8,
                     lambda_time_arr, lambda_unit_arr, lambda_nn_arr,
-                    self.max_loocv_samples, self.max_iter, self.tol,
-                    self.seed if self.seed is not None else 0
+                    self.max_iter, self.tol,
                 )
                 # Unpack result - 7 values including optional first_failed_obs
                 best_lt, best_lu, best_ln, best_score, n_valid, n_attempted, first_failed_obs = result
@@ -1406,13 +1389,6 @@ class TROP:
                 (t, i) for t in range(n_periods) for i in range(n_units)
                 if control_mask[t, i] and not np.isnan(Y[t, i])
             ]
-
-            # Subsample if needed (sample indices to avoid ValueError on list of tuples)
-            rng = np.random.default_rng(self.seed)
-            max_loocv = min(self.max_loocv_samples, len(control_obs))
-            if len(control_obs) > max_loocv:
-                indices = rng.choice(len(control_obs), size=max_loocv, replace=False)
-                control_obs = [control_obs[idx] for idx in indices]
 
             # Grid search with true LOOCV
             for lambda_time_val in self.lambda_time_grid:
@@ -1898,8 +1874,7 @@ class TROP:
                     Y, D.astype(np.float64), control_mask_u8,
                     time_dist_matrix,
                     lambda_time_arr, lambda_unit_arr, lambda_nn_arr,
-                    self.max_loocv_samples, self.max_iter, self.tol,
-                    self.seed if self.seed is not None else 0
+                    self.max_iter, self.tol,
                 )
                 # Unpack result - 7 values including optional first_failed_obs
                 best_lt, best_lu, best_ln, best_score, n_valid, n_attempted, first_failed_obs = result
@@ -2579,13 +2554,6 @@ class TROP:
             control_obs = [(t, i) for t in range(n_periods) for i in range(n_units)
                            if control_mask[t, i] and not np.isnan(Y[t, i])]
 
-        # Subsample for computational tractability (as noted in paper's footnote)
-        rng = np.random.default_rng(self.seed)
-        max_loocv = min(self.max_loocv_samples, len(control_obs))
-        if len(control_obs) > max_loocv:
-            indices = rng.choice(len(control_obs), size=max_loocv, replace=False)
-            control_obs = [control_obs[idx] for idx in indices]
-
         # Empty control set check: if no control observations, return infinity
         # A score of 0.0 would incorrectly "win" over legitimate parameters
         if len(control_obs) == 0:
@@ -2877,7 +2845,6 @@ class TROP:
             "tol": self.tol,
             "alpha": self.alpha,
             "n_bootstrap": self.n_bootstrap,
-            "max_loocv_samples": self.max_loocv_samples,
             "seed": self.seed,
         }
 

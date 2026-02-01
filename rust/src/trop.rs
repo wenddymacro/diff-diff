@@ -304,10 +304,8 @@ fn cycling_parameter_search(
 /// * `lambda_time_grid` - Grid of time decay parameters
 /// * `lambda_unit_grid` - Grid of unit distance parameters
 /// * `lambda_nn_grid` - Grid of nuclear norm parameters
-/// * `max_loocv_samples` - Maximum control observations to evaluate
 /// * `max_iter` - Maximum iterations for model estimation
 /// * `tol` - Convergence tolerance
-/// * `seed` - Random seed for subsampling
 ///
 /// # Returns
 /// (best_lambda_time, best_lambda_unit, best_lambda_nn, best_score, n_valid, n_attempted, first_failed_obs)
@@ -315,7 +313,7 @@ fn cycling_parameter_search(
 /// allowing Python to emit warnings when >10% of fits fail.
 /// first_failed_obs is Some((t, i)) if a fit failed during final score computation, None otherwise.
 #[pyfunction]
-#[pyo3(signature = (y, d, control_mask, time_dist_matrix, lambda_time_grid, lambda_unit_grid, lambda_nn_grid, max_loocv_samples, max_iter, tol, seed))]
+#[pyo3(signature = (y, d, control_mask, time_dist_matrix, lambda_time_grid, lambda_unit_grid, lambda_nn_grid, max_iter, tol))]
 #[allow(clippy::too_many_arguments)]
 pub fn loocv_grid_search<'py>(
     _py: Python<'py>,
@@ -326,10 +324,8 @@ pub fn loocv_grid_search<'py>(
     lambda_time_grid: PyReadonlyArray1<'py, f64>,
     lambda_unit_grid: PyReadonlyArray1<'py, f64>,
     lambda_nn_grid: PyReadonlyArray1<'py, f64>,
-    max_loocv_samples: usize,
     max_iter: usize,
     tol: f64,
-    seed: u64,
 ) -> PyResult<(f64, f64, f64, f64, usize, usize, Option<(usize, usize)>)> {
     let y_arr = y.as_array();
     let d_arr = d.as_array();
@@ -360,8 +356,6 @@ pub fn loocv_grid_search<'py>(
     let control_obs = get_control_observations(
         &y_arr,
         &control_mask_arr,
-        max_loocv_samples,
-        seed,
     );
 
     let n_attempted = control_obs.len();
@@ -409,16 +403,11 @@ pub fn loocv_grid_search<'py>(
     Ok((best_time, best_unit, best_nn, best_score, n_valid, n_attempted, first_failed))
 }
 
-/// Get sampled control observations for LOOCV.
+/// Get all valid control observations for LOOCV.
 fn get_control_observations(
     y: &ArrayView2<f64>,
     control_mask: &ArrayView2<u8>,
-    max_samples: usize,
-    seed: u64,
 ) -> Vec<(usize, usize)> {
-    use rand::prelude::*;
-    use rand_xoshiro::Xoshiro256PlusPlus;
-
     let n_periods = y.nrows();
     let n_units = y.ncols();
 
@@ -430,13 +419,6 @@ fn get_control_observations(
                 obs.push((t, i));
             }
         }
-    }
-
-    // Subsample if needed
-    if obs.len() > max_samples {
-        let mut rng = Xoshiro256PlusPlus::seed_from_u64(seed);
-        obs.shuffle(&mut rng);
-        obs.truncate(max_samples);
     }
 
     obs
@@ -463,48 +445,54 @@ fn loocv_score_for_params(
     let n_periods = y.nrows();
     let n_units = y.ncols();
 
-    let mut tau_sq_sum = 0.0;
-    let mut n_valid = 0usize;
+    // Parallelize over control observations — each per-observation computation
+    // is independent (compute weight matrix, fit model, extract τ²).
+    // with_min_len(64) prevents scheduling overhead from dominating on small panels.
+    let (tau_sq_sum, n_valid, first_failed) = control_obs
+        .par_iter()
+        .with_min_len(64)
+        .fold(
+            || (0.0f64, 0usize, None::<(usize, usize)>),
+            |(sum, valid, first_fail), &(t, i)| {
+                let weight_matrix = compute_weight_matrix(
+                    y,
+                    d,
+                    n_periods,
+                    n_units,
+                    i,
+                    t,
+                    lambda_time,
+                    lambda_unit,
+                    time_dist,
+                );
 
-    for &(t, i) in control_obs {
-        // Compute observation-specific weight matrix
-        let weight_matrix = compute_weight_matrix(
-            y,
-            d,
-            n_periods,
-            n_units,
-            i,
-            t,
-            lambda_time,
-            lambda_unit,
-            time_dist,
+                match estimate_model(
+                    y,
+                    control_mask,
+                    &weight_matrix.view(),
+                    lambda_nn,
+                    n_periods,
+                    n_units,
+                    max_iter,
+                    tol,
+                    Some((t, i)),
+                ) {
+                    Some((alpha, beta, l)) => {
+                        let tau = y[[t, i]] - alpha[i] - beta[t] - l[[t, i]];
+                        (sum + tau * tau, valid + 1, first_fail)
+                    }
+                    None => (sum, valid, first_fail.or(Some((t, i)))),
+                }
+            },
+        )
+        .reduce(
+            || (0.0, 0, None),
+            |(s1, v1, f1), (s2, v2, f2)| (s1 + s2, v1 + v2, f1.or(f2)),
         );
 
-        // Estimate model excluding this observation
-        match estimate_model(
-            y,
-            control_mask,
-            &weight_matrix.view(),
-            lambda_nn,
-            n_periods,
-            n_units,
-            max_iter,
-            tol,
-            Some((t, i)),
-        ) {
-            Some((alpha, beta, l)) => {
-                // Pseudo treatment effect: τ = Y - α - β - L
-                let tau = y[[t, i]] - alpha[i] - beta[t] - l[[t, i]];
-                tau_sq_sum += tau * tau;
-                n_valid += 1;
-            }
-            None => {
-                // Per Equation 5: Q(λ) must sum over ALL D==0 cells
-                // Any failure means this λ cannot produce valid estimates for all cells
-                // Return the failed observation (t, i) for warning metadata
-                return (f64::INFINITY, n_valid, Some((t, i)));
-            }
-        }
+    // Per Equation 5: if ANY fit fails, this λ combination is invalid
+    if first_failed.is_some() {
+        return (f64::INFINITY, n_valid, first_failed);
     }
 
     if n_valid == 0 {
@@ -1404,45 +1392,52 @@ fn loocv_score_joint(
     let n_periods = y.nrows();
     let n_units = y.ncols();
 
-    let mut tau_sq_sum = 0.0;
-    let mut n_valid = 0usize;
-
     // Compute global weights (same for all LOOCV iterations)
     let delta = compute_joint_weights(y, d, lambda_time, lambda_unit, treated_periods);
 
-    for &(t_ex, i_ex) in control_obs {
-        // Create modified delta with excluded observation zeroed out
-        let mut delta_ex = delta.clone();
-        delta_ex[[t_ex, i_ex]] = 0.0;
+    // Parallelize over control observations — each per-observation computation
+    // is independent (clone delta, zero one entry, fit model, extract τ²).
+    // with_min_len(64) prevents scheduling overhead from dominating on small panels.
+    let (tau_sq_sum, n_valid, first_failed) = control_obs
+        .par_iter()
+        .with_min_len(64)
+        .fold(
+            || (0.0f64, 0usize, None::<(usize, usize)>),
+            |(sum, valid, first_fail), &(t_ex, i_ex)| {
+                let mut delta_ex = delta.clone();
+                delta_ex[[t_ex, i_ex]] = 0.0;
 
-        // Fit joint model excluding this observation
-        let result = if lambda_nn >= 1e10 {
-            solve_joint_no_lowrank(y, d, &delta_ex.view())
-                .map(|(mu, alpha, beta, tau)| {
-                    let l = Array2::<f64>::zeros((n_periods, n_units));
-                    (mu, alpha, beta, l, tau)
-                })
-        } else {
-            solve_joint_with_lowrank(y, d, &delta_ex.view(), lambda_nn, max_iter, tol)
-        };
-
-        match result {
-            Some((mu, alpha, beta, l, _tau)) => {
-                // Pseudo treatment effect: τ = Y - μ - α - β - L
-                let y_ti = if y[[t_ex, i_ex]].is_finite() {
-                    y[[t_ex, i_ex]]
+                let result = if lambda_nn >= 1e10 {
+                    solve_joint_no_lowrank(y, d, &delta_ex.view())
+                        .map(|(mu, alpha, beta, tau)| {
+                            let l = Array2::<f64>::zeros((n_periods, n_units));
+                            (mu, alpha, beta, l, tau)
+                        })
                 } else {
-                    continue;
+                    solve_joint_with_lowrank(y, d, &delta_ex.view(), lambda_nn, max_iter, tol)
                 };
-                let tau_loocv = y_ti - mu - alpha[i_ex] - beta[t_ex] - l[[t_ex, i_ex]];
-                tau_sq_sum += tau_loocv * tau_loocv;
-                n_valid += 1;
-            }
-            None => {
-                // Any failure means this λ combination is invalid per Equation 5
-                return (f64::INFINITY, n_valid, Some((t_ex, i_ex)));
-            }
-        }
+
+                match result {
+                    Some((mu, alpha, beta, l, _tau)) => {
+                        if y[[t_ex, i_ex]].is_finite() {
+                            let tau_loocv = y[[t_ex, i_ex]] - mu - alpha[i_ex] - beta[t_ex] - l[[t_ex, i_ex]];
+                            (sum + tau_loocv * tau_loocv, valid + 1, first_fail)
+                        } else {
+                            (sum, valid, first_fail)
+                        }
+                    }
+                    None => (sum, valid, first_fail.or(Some((t_ex, i_ex)))),
+                }
+            },
+        )
+        .reduce(
+            || (0.0, 0, None),
+            |(s1, v1, f1), (s2, v2, f2)| (s1 + s2, v1 + v2, f1.or(f2)),
+        );
+
+    // Per Equation 5: if ANY fit fails, this λ combination is invalid
+    if first_failed.is_some() {
+        return (f64::INFINITY, n_valid, first_failed);
     }
 
     if n_valid == 0 {
@@ -1464,15 +1459,13 @@ fn loocv_score_joint(
 /// * `lambda_time_grid` - Grid of time decay parameters
 /// * `lambda_unit_grid` - Grid of unit distance parameters
 /// * `lambda_nn_grid` - Grid of nuclear norm parameters
-/// * `max_loocv_samples` - Maximum control observations to evaluate
 /// * `max_iter` - Maximum iterations for model estimation
 /// * `tol` - Convergence tolerance
-/// * `seed` - Random seed for subsampling
 ///
 /// # Returns
 /// (best_lambda_time, best_lambda_unit, best_lambda_nn, best_score, n_valid, n_attempted, first_failed_obs)
 #[pyfunction]
-#[pyo3(signature = (y, d, control_mask, lambda_time_grid, lambda_unit_grid, lambda_nn_grid, max_loocv_samples, max_iter, tol, seed))]
+#[pyo3(signature = (y, d, control_mask, lambda_time_grid, lambda_unit_grid, lambda_nn_grid, max_iter, tol))]
 #[allow(clippy::too_many_arguments)]
 pub fn loocv_grid_search_joint<'py>(
     _py: Python<'py>,
@@ -1482,10 +1475,8 @@ pub fn loocv_grid_search_joint<'py>(
     lambda_time_grid: PyReadonlyArray1<'py, f64>,
     lambda_unit_grid: PyReadonlyArray1<'py, f64>,
     lambda_nn_grid: PyReadonlyArray1<'py, f64>,
-    max_loocv_samples: usize,
     max_iter: usize,
     tol: f64,
-    seed: u64,
 ) -> PyResult<(f64, f64, f64, f64, usize, usize, Option<(usize, usize)>)> {
     let y_arr = y.as_array();
     let d_arr = d.as_array();
@@ -1527,7 +1518,7 @@ pub fn loocv_grid_search_joint<'py>(
     let treated_periods = n_periods.saturating_sub(first_treat_period);
 
     // Get control observations for LOOCV
-    let control_obs = get_control_observations(&y_arr, &control_mask_arr, max_loocv_samples, seed);
+    let control_obs = get_control_observations(&y_arr, &control_mask_arr);
     let n_attempted = control_obs.len();
 
     // Build grid combinations

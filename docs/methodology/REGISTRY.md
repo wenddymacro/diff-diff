@@ -540,9 +540,6 @@ Q(λ) = Σ_{j,s: D_js=0} [τ̂_js^loocv(λ)]²
   - `λ_nn=∞`: Factor model disabled (L=0), because infinite penalty; converted to `1e10` internally
   - **Note**: `λ_nn=0` means NO regularization (full-rank L), which is the OPPOSITE of "disabled"
   - **Validation**: `lambda_time_grid` and `lambda_unit_grid` must not contain inf. A `ValueError` is raised if they do, guiding users to use 0.0 for uniform weights per Eq. 3.
-- **Subsampling**: max_loocv_samples (default 100) for computational tractability
-  - This subsamples control observations, NOT parameter combinations
-  - Increases precision at cost of computation; increase for more precise tuning
 - **LOOCV failure handling** (Equation 5 compliance):
   - If ANY LOOCV fit fails for a parameter combination, Q(λ) = ∞
   - A warning is emitted on the first failure with the observation (t, i) and λ values
@@ -556,14 +553,14 @@ Q(λ) = Σ_{j,s: D_js=0} [τ̂_js^loocv(λ)]²
 - Rank selection: automatic via cross-validation, information criterion, or elbow
 - Zero singular values: handled by soft-thresholding
 - Extreme distances: weights regularized to prevent degeneracy
-- LOOCV fit failures: returns Q(λ) = ∞ on first failure (per Equation 5 requirement that Q sums over ALL D==0 cells); if all parameter combinations fail, falls back to defaults (1.0, 1.0, 0.1)
+- LOOCV fit failures: returns Q(λ) = ∞ on first failure (per Equation 5 requirement that Q sums over ALL control observations where D==0); if all parameter combinations fail, falls back to defaults (1.0, 1.0, 0.1)
 - **λ_nn=∞ implementation**: Only λ_nn uses infinity (converted to 1e10 for computation):
   - λ_nn=∞ → 1e10 (large penalty → L≈0, factor model disabled)
   - Conversion applied to grid values during LOOCV (including Rust backend)
   - Conversion applied to selected values for point estimation
   - Conversion applied to selected values for variance estimation (ensures SE matches ATT)
   - **Results storage**: `TROPResults` stores *original* λ_nn value (inf), while computations use 1e10. λ_time and λ_unit store their selected values directly (0.0 = uniform).
-- **Empty control observations**: If LOOCV control observations become empty (edge case during subsampling), returns Q(λ) = ∞ with warning. A score of 0.0 would incorrectly "win" over legitimate parameters.
+- **Empty control observations**: If no valid control observations exist, returns Q(λ) = ∞ with warning. A score of 0.0 would incorrectly "win" over legitimate parameters.
 - **Infinite LOOCV score handling**: If best LOOCV score is infinite, `best_lambda` is set to None, triggering defaults fallback
 - Validation: requires at least 2 periods before first treatment
 - **D matrix validation**: Treatment indicator must be an absorbing state (monotonic non-decreasing per unit)

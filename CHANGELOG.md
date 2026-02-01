@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **TROP `variance_method` parameter** — Jackknife variance estimation removed.
   Bootstrap (the only method specified in Athey et al. 2025) is now always used.
   The `variance_method` field has also been removed from `TROPResults`.
+- **TROP `max_loocv_samples` parameter** — Control observation subsampling removed
+  from LOOCV tuning parameter selection. Equation 5 of Athey et al. (2025) explicitly
+  sums over ALL control observations where D=0; the previous subsampling (default 100)
+  was not specified in the paper. LOOCV now uses all control observations, making
+  tuning fully deterministic. Inner LOOCV loops in the Rust backend are parallelized
+  to compensate for the increased observation count.
 
 ## [2.2.0] - 2026-01-27
 
