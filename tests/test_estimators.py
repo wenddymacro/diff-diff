@@ -46,13 +46,15 @@ def simple_did_data():
             # Add noise
             y += np.random.normal(0, 1)
 
-            data.append({
-                "unit": unit,
-                "period": period,
-                "treated": int(is_treated),
-                "post": period,
-                "outcome": y,
-            })
+            data.append(
+                {
+                    "unit": unit,
+                    "period": period,
+                    "treated": int(is_treated),
+                    "post": period,
+                    "outcome": y,
+                }
+            )
 
     return pd.DataFrame(data)
 
@@ -60,11 +62,13 @@ def simple_did_data():
 @pytest.fixture
 def simple_2x2_data():
     """Minimal 2x2 DiD data."""
-    return pd.DataFrame({
-        "outcome": [10, 11, 15, 18, 9, 10, 12, 13],
-        "treated": [1, 1, 1, 1, 0, 0, 0, 0],
-        "post": [0, 0, 1, 1, 0, 0, 1, 1],
-    })
+    return pd.DataFrame(
+        {
+            "outcome": [10, 11, 15, 18, 9, 10, 12, 13],
+            "treated": [1, 1, 1, 1, 0, 0, 0, 0],
+            "post": [0, 0, 1, 1, 0, 0, 1, 1],
+        }
+    )
 
 
 class TestDifferenceInDifferences:
@@ -73,12 +77,7 @@ class TestDifferenceInDifferences:
     def test_basic_fit(self, simple_2x2_data):
         """Test basic model fitting."""
         did = DifferenceInDifferences()
-        results = did.fit(
-            simple_2x2_data,
-            outcome="outcome",
-            treatment="treated",
-            time="post"
-        )
+        results = did.fit(simple_2x2_data, outcome="outcome", treatment="treated", time="post")
 
         assert isinstance(results, DiDResults)
         assert did.is_fitted_
@@ -89,12 +88,7 @@ class TestDifferenceInDifferences:
     def test_att_direction(self, simple_did_data):
         """Test that ATT is estimated in correct direction."""
         did = DifferenceInDifferences()
-        results = did.fit(
-            simple_did_data,
-            outcome="outcome",
-            treatment="treated",
-            time="post"
-        )
+        results = did.fit(simple_did_data, outcome="outcome", treatment="treated", time="post")
 
         # True ATT is 3.0, estimate should be close
         assert results.att > 0
@@ -103,10 +97,7 @@ class TestDifferenceInDifferences:
     def test_formula_interface(self, simple_2x2_data):
         """Test formula-based fitting."""
         did = DifferenceInDifferences()
-        results = did.fit(
-            simple_2x2_data,
-            formula="outcome ~ treated * post"
-        )
+        results = did.fit(simple_2x2_data, formula="outcome ~ treated * post")
 
         assert isinstance(results, DiDResults)
         assert did.is_fitted_
@@ -114,10 +105,7 @@ class TestDifferenceInDifferences:
     def test_formula_with_explicit_interaction(self, simple_2x2_data):
         """Test formula with explicit interaction syntax."""
         did = DifferenceInDifferences()
-        results = did.fit(
-            simple_2x2_data,
-            formula="outcome ~ treated + post + treated:post"
-        )
+        results = did.fit(simple_2x2_data, formula="outcome ~ treated + post + treated:post")
 
         assert isinstance(results, DiDResults)
 
@@ -127,16 +115,10 @@ class TestDifferenceInDifferences:
         did_classical = DifferenceInDifferences(robust=False)
 
         results_robust = did_robust.fit(
-            simple_did_data,
-            outcome="outcome",
-            treatment="treated",
-            time="post"
+            simple_did_data, outcome="outcome", treatment="treated", time="post"
         )
         results_classical = did_classical.fit(
-            simple_did_data,
-            outcome="outcome",
-            treatment="treated",
-            time="post"
+            simple_did_data, outcome="outcome", treatment="treated", time="post"
         )
 
         # The vcov matrices should differ (HC1 vs classical)
@@ -149,12 +131,7 @@ class TestDifferenceInDifferences:
     def test_confidence_interval(self, simple_did_data):
         """Test confidence interval properties."""
         did = DifferenceInDifferences(alpha=0.05)
-        results = did.fit(
-            simple_did_data,
-            outcome="outcome",
-            treatment="treated",
-            time="post"
-        )
+        results = did.fit(simple_did_data, outcome="outcome", treatment="treated", time="post")
 
         lower, upper = results.conf_int
         assert lower < results.att < upper
@@ -183,11 +160,13 @@ class TestDifferenceInDifferences:
 
     def test_invalid_treatment_values(self):
         """Test error on non-binary treatment."""
-        data = pd.DataFrame({
-            "outcome": [1, 2, 3, 4],
-            "treated": [0, 1, 2, 3],  # Invalid: not binary
-            "post": [0, 0, 1, 1],
-        })
+        data = pd.DataFrame(
+            {
+                "outcome": [1, 2, 3, 4],
+                "treated": [0, 1, 2, 3],  # Invalid: not binary
+                "post": [0, 0, 1, 1],
+            }
+        )
 
         did = DifferenceInDifferences()
         with pytest.raises(ValueError, match="binary"):
@@ -195,10 +174,12 @@ class TestDifferenceInDifferences:
 
     def test_missing_column_error(self):
         """Test error when column is missing."""
-        data = pd.DataFrame({
-            "outcome": [1, 2, 3, 4],
-            "treated": [0, 0, 1, 1],
-        })
+        data = pd.DataFrame(
+            {
+                "outcome": [1, 2, 3, 4],
+                "treated": [0, 0, 1, 1],
+            }
+        )
 
         did = DifferenceInDifferences()
         with pytest.raises(ValueError, match="Missing columns"):
@@ -224,7 +205,7 @@ class TestDifferenceInDifferences:
                 outcome="outcome",
                 treatment="treated",
                 time="post",
-                covariates=["collinear_cov"]
+                covariates=["collinear_cov"],
             )
 
     def test_rank_deficient_action_silent_no_warning(self, simple_2x2_data):
@@ -244,19 +225,23 @@ class TestDifferenceInDifferences:
                 outcome="outcome",
                 treatment="treated",
                 time="post",
-                covariates=["collinear_cov"]
+                covariates=["collinear_cov"],
             )
 
             # No warnings about rank deficiency should be emitted
-            rank_warnings = [x for x in w if "Rank-deficient" in str(x.message)
-                           or "rank-deficient" in str(x.message).lower()]
+            rank_warnings = [
+                x
+                for x in w
+                if "Rank-deficient" in str(x.message) or "rank-deficient" in str(x.message).lower()
+            ]
             assert len(rank_warnings) == 0, f"Expected no rank warnings, got {rank_warnings}"
 
         # Should still have NaN for dropped coefficient
         assert "collinear_cov" in results.coefficients
         # Either collinear_cov or treated will be NaN
-        has_nan = (np.isnan(results.coefficients.get("collinear_cov", 0)) or
-                   np.isnan(results.coefficients.get("treated", 0)))
+        has_nan = np.isnan(results.coefficients.get("collinear_cov", 0)) or np.isnan(
+            results.coefficients.get("treated", 0)
+        )
         assert has_nan, "Expected NaN for one of the collinear coefficients"
 
     def test_rank_deficient_action_warn_default(self, simple_2x2_data):
@@ -276,12 +261,15 @@ class TestDifferenceInDifferences:
                 outcome="outcome",
                 treatment="treated",
                 time="post",
-                covariates=["collinear_cov"]
+                covariates=["collinear_cov"],
             )
 
             # Should have a warning about rank deficiency
-            rank_warnings = [x for x in w if "Rank-deficient" in str(x.message)
-                           or "rank-deficient" in str(x.message).lower()]
+            rank_warnings = [
+                x
+                for x in w
+                if "Rank-deficient" in str(x.message) or "rank-deficient" in str(x.message).lower()
+            ]
             assert len(rank_warnings) > 0, "Expected warning about rank deficiency"
 
 
@@ -291,12 +279,7 @@ class TestDiDResults:
     def test_repr(self, simple_2x2_data):
         """Test string representation."""
         did = DifferenceInDifferences()
-        results = did.fit(
-            simple_2x2_data,
-            outcome="outcome",
-            treatment="treated",
-            time="post"
-        )
+        results = did.fit(simple_2x2_data, outcome="outcome", treatment="treated", time="post")
 
         repr_str = repr(results)
         assert "DiDResults" in repr_str
@@ -305,12 +288,7 @@ class TestDiDResults:
     def test_to_dict(self, simple_2x2_data):
         """Test conversion to dictionary."""
         did = DifferenceInDifferences()
-        results = did.fit(
-            simple_2x2_data,
-            outcome="outcome",
-            treatment="treated",
-            time="post"
-        )
+        results = did.fit(simple_2x2_data, outcome="outcome", treatment="treated", time="post")
 
         result_dict = results.to_dict()
         assert "att" in result_dict
@@ -320,12 +298,7 @@ class TestDiDResults:
     def test_to_dataframe(self, simple_2x2_data):
         """Test conversion to DataFrame."""
         did = DifferenceInDifferences()
-        results = did.fit(
-            simple_2x2_data,
-            outcome="outcome",
-            treatment="treated",
-            time="post"
-        )
+        results = did.fit(simple_2x2_data, outcome="outcome", treatment="treated", time="post")
 
         df = results.to_dataframe()
         assert isinstance(df, pd.DataFrame)
@@ -335,12 +308,7 @@ class TestDiDResults:
     def test_significance_stars(self, simple_did_data):
         """Test significance star notation."""
         did = DifferenceInDifferences()
-        results = did.fit(
-            simple_did_data,
-            outcome="outcome",
-            treatment="treated",
-            time="post"
-        )
+        results = did.fit(simple_did_data, outcome="outcome", treatment="treated", time="post")
 
         # With true effect of 3.0 and n=200, should be significant
         assert results.significance_stars in ["*", "**", "***"]
@@ -348,12 +316,7 @@ class TestDiDResults:
     def test_is_significant_property(self, simple_did_data):
         """Test is_significant property."""
         did = DifferenceInDifferences(alpha=0.05)
-        results = did.fit(
-            simple_did_data,
-            outcome="outcome",
-            treatment="treated",
-            time="post"
-        )
+        results = did.fit(simple_did_data, outcome="outcome", treatment="treated", time="post")
 
         # Boolean check
         assert isinstance(results.is_significant, bool)
@@ -388,14 +351,16 @@ class TestFixedEffects:
 
                 y += np.random.normal(0, 0.5)
 
-                data.append({
-                    "unit": unit,
-                    "state": f"state_{state}",
-                    "period": period,
-                    "treated": int(is_treated),
-                    "post": post,
-                    "outcome": y,
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "state": f"state_{state}",
+                        "period": period,
+                        "treated": int(is_treated),
+                        "post": post,
+                        "outcome": y,
+                    }
+                )
 
         return pd.DataFrame(data)
 
@@ -407,7 +372,7 @@ class TestFixedEffects:
             outcome="outcome",
             treatment="treated",
             time="post",
-            fixed_effects=["state"]
+            fixed_effects=["state"],
         )
 
         assert results is not None
@@ -423,7 +388,7 @@ class TestFixedEffects:
             outcome="outcome",
             treatment="treated",
             time="post",
-            fixed_effects=["state"]
+            fixed_effects=["state"],
         )
 
         # Should have state dummy coefficients
@@ -434,11 +399,7 @@ class TestFixedEffects:
         """Test absorbed (within-transformed) fixed effects."""
         did = DifferenceInDifferences()
         results = did.fit(
-            panel_data_with_fe,
-            outcome="outcome",
-            treatment="treated",
-            time="post",
-            absorb=["unit"]
+            panel_data_with_fe, outcome="outcome", treatment="treated", time="post", absorb=["unit"]
         )
 
         assert results is not None
@@ -452,10 +413,7 @@ class TestFixedEffects:
         did_with_fe = DifferenceInDifferences()
 
         results_no_fe = did_no_fe.fit(
-            panel_data_with_fe,
-            outcome="outcome",
-            treatment="treated",
-            time="post"
+            panel_data_with_fe, outcome="outcome", treatment="treated", time="post"
         )
 
         results_with_fe = did_with_fe.fit(
@@ -463,7 +421,7 @@ class TestFixedEffects:
             outcome="outcome",
             treatment="treated",
             time="post",
-            fixed_effects=["state"]
+            fixed_effects=["state"],
         )
 
         # Both should estimate positive ATT
@@ -482,7 +440,7 @@ class TestFixedEffects:
                 outcome="outcome",
                 treatment="treated",
                 time="post",
-                fixed_effects=["nonexistent_column"]
+                fixed_effects=["nonexistent_column"],
             )
 
     def test_invalid_absorb_column(self, panel_data_with_fe):
@@ -494,7 +452,7 @@ class TestFixedEffects:
                 outcome="outcome",
                 treatment="treated",
                 time="post",
-                absorb=["nonexistent_column"]
+                absorb=["nonexistent_column"],
             )
 
     def test_multiple_fixed_effects(self, panel_data_with_fe):
@@ -508,7 +466,7 @@ class TestFixedEffects:
             outcome="outcome",
             treatment="treated",
             time="post",
-            fixed_effects=["state", "industry"]
+            fixed_effects=["state", "industry"],
         )
 
         assert results is not None
@@ -530,7 +488,7 @@ class TestFixedEffects:
             treatment="treated",
             time="post",
             covariates=["size"],
-            fixed_effects=["state"]
+            fixed_effects=["state"],
         )
 
         assert results is not None
@@ -564,12 +522,14 @@ class TestParallelTrendsRobust:
 
                 y += np.random.normal(0, 0.5)
 
-                data.append({
-                    "unit": unit,
-                    "period": period,
-                    "treated": int(is_treated),
-                    "outcome": y,
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": period,
+                        "treated": int(is_treated),
+                        "outcome": y,
+                    }
+                )
 
         return pd.DataFrame(data)
 
@@ -600,12 +560,14 @@ class TestParallelTrendsRobust:
 
                 y += np.random.normal(0, 0.5)
 
-                data.append({
-                    "unit": unit,
-                    "period": period,
-                    "treated": int(is_treated),
-                    "outcome": y,
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": period,
+                        "treated": int(is_treated),
+                        "outcome": y,
+                    }
+                )
 
         return pd.DataFrame(data)
 
@@ -620,7 +582,7 @@ class TestParallelTrendsRobust:
             treatment_group="treated",
             unit="unit",
             pre_periods=[0, 1, 2],
-            seed=42
+            seed=42,
         )
 
         assert "wasserstein_distance" in results
@@ -641,7 +603,7 @@ class TestParallelTrendsRobust:
             treatment_group="treated",
             unit="unit",
             pre_periods=[0, 1, 2],
-            seed=42
+            seed=42,
         )
 
         # When trends are not parallel, should detect it
@@ -661,7 +623,7 @@ class TestParallelTrendsRobust:
             treatment_group="treated",
             unit="unit",
             pre_periods=[0, 1, 2],
-            seed=42
+            seed=42,
         )
 
         assert "treated_changes" in results
@@ -679,7 +641,7 @@ class TestParallelTrendsRobust:
             time="period",
             treatment_group="treated",
             pre_periods=[0, 1, 2],
-            seed=42
+            seed=42,
         )
 
         assert "wasserstein_distance" in results
@@ -695,7 +657,7 @@ class TestParallelTrendsRobust:
             time="period",
             treatment_group="treated",
             unit="unit",
-            pre_periods=[0, 1, 2]
+            pre_periods=[0, 1, 2],
         )
 
         assert "tost_p_value" in results
@@ -714,7 +676,7 @@ class TestParallelTrendsRobust:
             time="period",
             treatment_group="treated",
             unit="unit",
-            pre_periods=[0, 1, 2]
+            pre_periods=[0, 1, 2],
         )
 
         # When trends are not parallel, should not be equivalent
@@ -731,7 +693,7 @@ class TestParallelTrendsRobust:
             treatment_group="treated",
             unit="unit",
             pre_periods=[0, 1, 2],
-            equivalence_margin=0.1  # Very tight margin
+            equivalence_margin=0.1,  # Very tight margin
         )
 
         assert results["equivalence_margin"] == 0.1
@@ -747,7 +709,7 @@ class TestParallelTrendsRobust:
             treatment_group="treated",
             unit="unit",
             pre_periods=[0, 1, 2],
-            seed=42
+            seed=42,
         )
 
         assert "ks_statistic" in results
@@ -766,7 +728,7 @@ class TestParallelTrendsRobust:
             treatment_group="treated",
             unit="unit",
             pre_periods=[0, 1, 2],
-            seed=42
+            seed=42,
         )
 
         assert "variance_ratio" in results
@@ -781,12 +743,14 @@ class TestEdgeCases:
         import warnings
 
         # Create data where a covariate is perfectly correlated with treatment
-        data = pd.DataFrame({
-            "outcome": [10, 11, 15, 18, 9, 10, 12, 13],
-            "treated": [1, 1, 1, 1, 0, 0, 0, 0],
-            "post": [0, 0, 1, 1, 0, 0, 1, 1],
-            "duplicate_treated": [1, 1, 1, 1, 0, 0, 0, 0],  # Same as treated
-        })
+        data = pd.DataFrame(
+            {
+                "outcome": [10, 11, 15, 18, 9, 10, 12, 13],
+                "treated": [1, 1, 1, 1, 0, 0, 0, 0],
+                "post": [0, 0, 1, 1, 0, 0, 1, 1],
+                "duplicate_treated": [1, 1, 1, 1, 0, 0, 0, 0],  # Same as treated
+            }
+        )
 
         did = DifferenceInDifferences()
 
@@ -798,7 +762,7 @@ class TestEdgeCases:
                 outcome="outcome",
                 treatment="treated",
                 time="post",
-                covariates=["duplicate_treated"]
+                covariates=["duplicate_treated"],
             )
             # Should emit a warning about rank deficiency
             rank_warnings = [x for x in w if "Rank-deficient" in str(x.message)]
@@ -820,12 +784,14 @@ class TestEdgeCases:
             is_treated = unit < n_units // 2
             for period in range(n_periods):
                 y = 10.0 + period * 1.5 + np.random.normal(0, 0.5)
-                data.append({
-                    "unit": unit,
-                    "period": period,
-                    "treated": int(is_treated),
-                    "outcome": y,
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": period,
+                        "treated": int(is_treated),
+                        "outcome": y,
+                    }
+                )
 
         df = pd.DataFrame(data)
 
@@ -838,7 +804,7 @@ class TestEdgeCases:
             unit="unit",
             pre_periods=[0, 1],
             seed=42,
-            wasserstein_threshold=0.01  # Very strict
+            wasserstein_threshold=0.01,  # Very strict
         )
 
         # Test with high threshold (more lenient)
@@ -850,7 +816,7 @@ class TestEdgeCases:
             unit="unit",
             pre_periods=[0, 1],
             seed=42,
-            wasserstein_threshold=1.0  # Very lenient
+            wasserstein_threshold=1.0,  # Very lenient
         )
 
         # Both should return valid results
@@ -862,12 +828,14 @@ class TestEdgeCases:
         from diff_diff.utils import equivalence_test_trends
 
         # Create minimal data with only 1 observation per group
-        data = pd.DataFrame({
-            "outcome": [10, 15],
-            "period": [0, 1],
-            "treated": [1, 0],
-            "unit": [0, 1],
-        })
+        data = pd.DataFrame(
+            {
+                "outcome": [10, 15],
+                "period": [0, 1],
+                "treated": [1, 0],
+                "unit": [0, 1],
+            }
+        )
 
         results = equivalence_test_trends(
             data,
@@ -875,7 +843,7 @@ class TestEdgeCases:
             time="period",
             treatment_group="treated",
             unit="unit",
-            pre_periods=[0]
+            pre_periods=[0],
         )
 
         # Should return NaN values with error message
@@ -887,18 +855,16 @@ class TestEdgeCases:
         """Test that single pre-period returns NaN values."""
         from diff_diff.utils import check_parallel_trends
 
-        data = pd.DataFrame({
-            "outcome": [10, 11, 12, 13],
-            "time": [0, 0, 0, 0],  # All same period
-            "treated": [1, 1, 0, 0],
-        })
+        data = pd.DataFrame(
+            {
+                "outcome": [10, 11, 12, 13],
+                "time": [0, 0, 0, 0],  # All same period
+                "treated": [1, 1, 0, 0],
+            }
+        )
 
         results = check_parallel_trends(
-            data,
-            outcome="outcome",
-            time="time",
-            treatment_group="treated",
-            pre_periods=[0]
+            data, outcome="outcome", time="time", treatment_group="treated", pre_periods=[0]
         )
 
         # Should handle gracefully with NaN
@@ -930,13 +896,15 @@ class TestTwoWayFixedEffects:
 
                 y += np.random.normal(0, 0.5)
 
-                data.append({
-                    "unit": unit,
-                    "period": period,
-                    "treated": int(is_treated),
-                    "post": post,
-                    "outcome": y,
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": period,
+                        "treated": int(is_treated),
+                        "post": post,
+                        "outcome": y,
+                    }
+                )
 
         return pd.DataFrame(data)
 
@@ -946,11 +914,7 @@ class TestTwoWayFixedEffects:
 
         twfe = TwoWayFixedEffects()
         results = twfe.fit(
-            twfe_panel_data,
-            outcome="outcome",
-            treatment="treated",
-            time="post",
-            unit="unit"
+            twfe_panel_data, outcome="outcome", treatment="treated", time="post", unit="unit"
         )
 
         assert results is not None
@@ -975,7 +939,7 @@ class TestTwoWayFixedEffects:
             treatment="treated",
             time="post",
             unit="unit",
-            covariates=["size"]
+            covariates=["size"],
         )
 
         assert results is not None
@@ -992,7 +956,7 @@ class TestTwoWayFixedEffects:
                 outcome="outcome",
                 treatment="treated",
                 time="post",
-                unit="nonexistent_unit"
+                unit="nonexistent_unit",
             )
 
     def test_twfe_clusters_at_unit_level(self, twfe_panel_data):
@@ -1001,11 +965,7 @@ class TestTwoWayFixedEffects:
 
         twfe = TwoWayFixedEffects()
         results = twfe.fit(
-            twfe_panel_data,
-            outcome="outcome",
-            treatment="treated",
-            time="post",
-            unit="unit"
+            twfe_panel_data, outcome="outcome", treatment="treated", time="post", unit="unit"
         )
 
         # Cluster should NOT be mutated (remains None) - clustering is handled internally
@@ -1024,13 +984,15 @@ class TestTwoWayFixedEffects:
         for unit in range(10):
             is_treated = unit < 5
             for period in range(4):
-                data.append({
-                    "unit": unit,
-                    "period": period,
-                    "treated": int(is_treated),  # Same for all periods
-                    "post": 1 if period >= 2 else 0,
-                    "outcome": 10.0 + unit * 0.5 + period * 0.3 + np.random.normal(0, 0.1),
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": period,
+                        "treated": int(is_treated),  # Same for all periods
+                        "post": 1 if period >= 2 else 0,
+                        "outcome": 10.0 + unit * 0.5 + period * 0.3 + np.random.normal(0, 0.1),
+                    }
+                )
         df = pd.DataFrame(data)
 
         # Make treatment_post constant for treated units (collinear)
@@ -1045,18 +1007,16 @@ class TestTwoWayFixedEffects:
         # The key is that it should NOT silently produce misleading results
         try:
             results = twfe.fit(
-                df_collinear,
-                outcome="outcome",
-                treatment="treated",
-                time="post",
-                unit="unit"
+                df_collinear, outcome="outcome", treatment="treated", time="post", unit="unit"
             )
             # If we get here without error, the ATT should still be computed
             # (this means only covariates were dropped, not the treatment)
             assert results is not None
         except ValueError as e:
             # If treatment column is dropped, should get informative error
-            assert "collinear" in str(e).lower() or "Treatment effect cannot be identified" in str(e)
+            assert "collinear" in str(e).lower() or "Treatment effect cannot be identified" in str(
+                e
+            )
 
     def test_rank_deficient_action_error_raises(self, twfe_panel_data):
         """Test that rank_deficient_action='error' raises ValueError on collinear data."""
@@ -1074,7 +1034,7 @@ class TestTwoWayFixedEffects:
                 treatment="treated",
                 time="post",
                 unit="unit",
-                covariates=["collinear_cov"]
+                covariates=["collinear_cov"],
             )
 
     def test_rank_deficient_action_silent_no_warning(self, twfe_panel_data):
@@ -1097,13 +1057,17 @@ class TestTwoWayFixedEffects:
                 treatment="treated",
                 time="post",
                 unit="unit",
-                covariates=["size", "size_dup"]
+                covariates=["size", "size_dup"],
             )
 
             # No warnings about rank deficiency or collinearity should be emitted
-            rank_warnings = [x for x in w if "Rank-deficient" in str(x.message)
-                           or "rank-deficient" in str(x.message).lower()
-                           or "collinear" in str(x.message).lower()]
+            rank_warnings = [
+                x
+                for x in w
+                if "Rank-deficient" in str(x.message)
+                or "rank-deficient" in str(x.message).lower()
+                or "collinear" in str(x.message).lower()
+            ]
             assert len(rank_warnings) == 0, f"Expected no rank warnings, got {rank_warnings}"
 
         # Should still get valid results
@@ -1125,20 +1089,20 @@ class TestClusterRobustSE:
                 treated = cluster < 5
                 post = obs >= 5
                 y = 10 + (3.0 if treated and post else 0) + np.random.normal(0, 1)
-                data.append({
-                    "cluster": cluster,
-                    "outcome": y,
-                    "treated": int(treated),
-                    "post": int(post),
-                })
+                data.append(
+                    {
+                        "cluster": cluster,
+                        "outcome": y,
+                        "treated": int(treated),
+                        "post": int(post),
+                    }
+                )
 
         df = pd.DataFrame(data)
 
         # With clustering
         did_cluster = DifferenceInDifferences(cluster="cluster")
-        results_cluster = did_cluster.fit(
-            df, outcome="outcome", treatment="treated", time="post"
-        )
+        results_cluster = did_cluster.fit(df, outcome="outcome", treatment="treated", time="post")
 
         # Without clustering
         did_no_cluster = DifferenceInDifferences(robust=True)
@@ -1180,12 +1144,14 @@ class TestMultiPeriodDiD:
 
                 y += np.random.normal(0, 0.5)
 
-                data.append({
-                    "unit": unit,
-                    "period": period,
-                    "treated": int(is_treated),
-                    "outcome": y,
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": period,
+                        "treated": int(is_treated),
+                        "outcome": y,
+                    }
+                )
 
         return pd.DataFrame(data)
 
@@ -1214,12 +1180,14 @@ class TestMultiPeriodDiD:
 
                 y += np.random.normal(0, 0.5)
 
-                data.append({
-                    "unit": unit,
-                    "period": period,
-                    "treated": int(is_treated),
-                    "outcome": y,
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": period,
+                        "treated": int(is_treated),
+                        "outcome": y,
+                    }
+                )
 
         return pd.DataFrame(data), true_effects
 
@@ -1231,13 +1199,15 @@ class TestMultiPeriodDiD:
             outcome="outcome",
             treatment="treated",
             time="period",
-            post_periods=[3, 4, 5]
+            post_periods=[3, 4, 5],
+            reference_period=2,
         )
 
         assert isinstance(results, MultiPeriodDiDResults)
         assert did.is_fitted_
         assert results.n_obs == 600  # 100 units * 6 periods
-        assert len(results.period_effects) == 3  # 3 post-periods
+        # 5 estimated periods: pre=[0,1] + post=[3,4,5] (ref=2 excluded)
+        assert len(results.period_effects) == 5
         assert len(results.pre_periods) == 3
         assert len(results.post_periods) == 3
 
@@ -1249,7 +1219,8 @@ class TestMultiPeriodDiD:
             outcome="outcome",
             treatment="treated",
             time="period",
-            post_periods=[3, 4, 5]
+            post_periods=[3, 4, 5],
+            reference_period=2,
         )
 
         # True ATT is 3.0
@@ -1266,14 +1237,16 @@ class TestMultiPeriodDiD:
             outcome="outcome",
             treatment="treated",
             time="period",
-            post_periods=[3, 4, 5]
+            post_periods=[3, 4, 5],
+            reference_period=2,
         )
 
         # Each period-specific effect should be close to truth
         for period, true_effect in true_effects.items():
             estimated = results.period_effects[period].effect
-            assert abs(estimated - true_effect) < 0.5, \
-                f"Period {period}: expected ~{true_effect}, got {estimated}"
+            assert (
+                abs(estimated - true_effect) < 0.5
+            ), f"Period {period}: expected ~{true_effect}, got {estimated}"
 
     def test_period_effects_have_all_stats(self, multi_period_data):
         """Test that period effects contain all statistics."""
@@ -1283,16 +1256,17 @@ class TestMultiPeriodDiD:
             outcome="outcome",
             treatment="treated",
             time="period",
-            post_periods=[3, 4, 5]
+            post_periods=[3, 4, 5],
+            reference_period=2,
         )
 
         for period, pe in results.period_effects.items():
             assert isinstance(pe, PeriodEffect)
-            assert hasattr(pe, 'effect')
-            assert hasattr(pe, 'se')
-            assert hasattr(pe, 't_stat')
-            assert hasattr(pe, 'p_value')
-            assert hasattr(pe, 'conf_int')
+            assert hasattr(pe, "effect")
+            assert hasattr(pe, "se")
+            assert hasattr(pe, "t_stat")
+            assert hasattr(pe, "p_value")
+            assert hasattr(pe, "conf_int")
             assert pe.se > 0
             assert len(pe.conf_int) == 2
             assert pe.conf_int[0] < pe.conf_int[1]
@@ -1305,17 +1279,27 @@ class TestMultiPeriodDiD:
             outcome="outcome",
             treatment="treated",
             time="period",
-            post_periods=[3, 4, 5]
+            post_periods=[3, 4, 5],
+            reference_period=2,
         )
 
-        # Valid period
+        # Valid post-period
         effect = results.get_effect(4)
         assert isinstance(effect, PeriodEffect)
         assert effect.period == 4
 
-        # Invalid period
+        # Valid pre-period (now accessible)
+        pre_effect = results.get_effect(0)
+        assert isinstance(pre_effect, PeriodEffect)
+        assert pre_effect.period == 0
+
+        # Reference period raises with informative message
+        with pytest.raises(KeyError, match="reference period"):
+            results.get_effect(2)
+
+        # Non-existent period raises
         with pytest.raises(KeyError):
-            results.get_effect(0)  # Pre-period
+            results.get_effect(99)
 
     def test_auto_infer_post_periods(self, multi_period_data):
         """Test automatic inference of post-periods."""
@@ -1324,7 +1308,8 @@ class TestMultiPeriodDiD:
             multi_period_data,
             outcome="outcome",
             treatment="treated",
-            time="period"
+            time="period",
+            reference_period=2,
             # post_periods not specified - should infer last half
         )
 
@@ -1341,14 +1326,21 @@ class TestMultiPeriodDiD:
             treatment="treated",
             time="period",
             post_periods=[3, 4, 5],
-            reference_period=2  # Use period 2 as reference
+            reference_period=1,  # Use period 1 as reference (not default)
         )
 
         # Should work and give reasonable results
         assert results is not None
         assert did.is_fitted_
         # Reference period should not be in coefficients as a dummy
-        assert "period_2" not in results.coefficients
+        assert "period_1" not in results.coefficients
+        # Reference period should be stored on results
+        assert results.reference_period == 1
+        # Reference period should not be in period_effects
+        assert 1 not in results.period_effects
+        # Other pre-periods should be in period_effects
+        assert 0 in results.period_effects
+        assert 2 in results.period_effects
 
     def test_with_covariates(self, multi_period_data):
         """Test multi-period DiD with covariates."""
@@ -1362,7 +1354,8 @@ class TestMultiPeriodDiD:
             treatment="treated",
             time="period",
             post_periods=[3, 4, 5],
-            covariates=["size"]
+            covariates=["size"],
+            reference_period=2,
         )
 
         assert results is not None
@@ -1387,13 +1380,15 @@ class TestMultiPeriodDiD:
                     y += 3.0
                 y += np.random.normal(0, 0.5)
 
-                data.append({
-                    "unit": unit,
-                    "state": f"state_{state}",
-                    "period": period,
-                    "treated": int(is_treated),
-                    "outcome": y,
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "state": f"state_{state}",
+                        "period": period,
+                        "treated": int(is_treated),
+                        "outcome": y,
+                    }
+                )
 
         df = pd.DataFrame(data)
 
@@ -1404,7 +1399,8 @@ class TestMultiPeriodDiD:
             treatment="treated",
             time="period",
             post_periods=[3, 4, 5],
-            fixed_effects=["state"]
+            reference_period=2,
+            fixed_effects=["state"],
         )
 
         assert results is not None
@@ -1421,7 +1417,8 @@ class TestMultiPeriodDiD:
             treatment="treated",
             time="period",
             post_periods=[3, 4, 5],
-            absorb=["unit"]
+            reference_period=2,
+            absorb=["unit"],
         )
 
         assert results is not None
@@ -1438,7 +1435,8 @@ class TestMultiPeriodDiD:
             outcome="outcome",
             treatment="treated",
             time="period",
-            post_periods=[3, 4, 5]
+            post_periods=[3, 4, 5],
+            reference_period=2,
         )
 
         results_robust = did_robust.fit(
@@ -1446,7 +1444,8 @@ class TestMultiPeriodDiD:
             outcome="outcome",
             treatment="treated",
             time="period",
-            post_periods=[3, 4, 5]
+            post_periods=[3, 4, 5],
+            reference_period=2,
         )
 
         # ATT should be similar
@@ -1463,13 +1462,15 @@ class TestMultiPeriodDiD:
             outcome="outcome",
             treatment="treated",
             time="period",
-            post_periods=[3, 4, 5]
+            post_periods=[3, 4, 5],
+            reference_period=2,
         )
 
         summary = results.summary()
         assert isinstance(summary, str)
         assert "Multi-Period" in summary
-        assert "Period-Specific" in summary
+        assert "Post-Period Treatment Effects" in summary
+        assert "Pre-Period" in summary
         assert "Average Treatment Effect" in summary
         assert "Avg ATT" in summary
 
@@ -1481,7 +1482,8 @@ class TestMultiPeriodDiD:
             outcome="outcome",
             treatment="treated",
             time="period",
-            post_periods=[3, 4, 5]
+            post_periods=[3, 4, 5],
+            reference_period=2,
         )
 
         result_dict = results.to_dict()
@@ -1498,15 +1500,17 @@ class TestMultiPeriodDiD:
             outcome="outcome",
             treatment="treated",
             time="period",
-            post_periods=[3, 4, 5]
+            post_periods=[3, 4, 5],
+            reference_period=2,
         )
 
         df = results.to_dataframe()
         assert isinstance(df, pd.DataFrame)
-        assert len(df) == 3  # 3 post-periods
+        assert len(df) == 5  # 2 pre + 3 post periods
         assert "period" in df.columns
         assert "effect" in df.columns
         assert "p_value" in df.columns
+        assert "is_post" in df.columns
 
     def test_is_significant_property(self, multi_period_data):
         """Test is_significant property."""
@@ -1516,7 +1520,8 @@ class TestMultiPeriodDiD:
             outcome="outcome",
             treatment="treated",
             time="period",
-            post_periods=[3, 4, 5]
+            post_periods=[3, 4, 5],
+            reference_period=2,
         )
 
         # With true effect of 3.0, should be significant
@@ -1531,7 +1536,8 @@ class TestMultiPeriodDiD:
             outcome="outcome",
             treatment="treated",
             time="period",
-            post_periods=[3, 4, 5]
+            post_periods=[3, 4, 5],
+            reference_period=2,
         )
 
         # Should have significance stars
@@ -1545,7 +1551,8 @@ class TestMultiPeriodDiD:
             outcome="outcome",
             treatment="treated",
             time="period",
-            post_periods=[3, 4, 5]
+            post_periods=[3, 4, 5],
+            reference_period=2,
         )
 
         repr_str = repr(results)
@@ -1560,7 +1567,8 @@ class TestMultiPeriodDiD:
             outcome="outcome",
             treatment="treated",
             time="period",
-            post_periods=[3, 4, 5]
+            post_periods=[3, 4, 5],
+            reference_period=2,
         )
 
         pe = results.period_effects[3]
@@ -1578,7 +1586,7 @@ class TestMultiPeriodDiD:
                 outcome="outcome",
                 treatment="treated",
                 time="period",
-                post_periods=[3, 4, 99]  # 99 doesn't exist
+                post_periods=[3, 4, 99],  # 99 doesn't exist
             )
 
     def test_no_pre_periods_error(self, multi_period_data):
@@ -1590,26 +1598,22 @@ class TestMultiPeriodDiD:
                 outcome="outcome",
                 treatment="treated",
                 time="period",
-                post_periods=[0, 1, 2, 3, 4, 5]  # All periods
+                post_periods=[0, 1, 2, 3, 4, 5],  # All periods
             )
 
     def test_no_post_periods_error(self):
         """Test error when no post-treatment periods."""
-        data = pd.DataFrame({
-            "outcome": [10, 11, 12, 13],
-            "treated": [1, 1, 0, 0],
-            "period": [0, 1, 0, 1],
-        })
+        data = pd.DataFrame(
+            {
+                "outcome": [10, 11, 12, 13],
+                "treated": [1, 1, 0, 0],
+                "period": [0, 1, 0, 1],
+            }
+        )
 
         did = MultiPeriodDiD()
         with pytest.raises(ValueError, match="at least one post-treatment period"):
-            did.fit(
-                data,
-                outcome="outcome",
-                treatment="treated",
-                time="period",
-                post_periods=[]
-            )
+            did.fit(data, outcome="outcome", treatment="treated", time="period", post_periods=[])
 
     def test_invalid_treatment_values(self, multi_period_data):
         """Test error on non-binary treatment."""
@@ -1622,7 +1626,7 @@ class TestMultiPeriodDiD:
                 outcome="outcome",
                 treatment="treated",
                 time="period",
-                post_periods=[3, 4, 5]
+                post_periods=[3, 4, 5],
             )
 
     def test_unfitted_model_error(self):
@@ -1639,7 +1643,8 @@ class TestMultiPeriodDiD:
             outcome="outcome",
             treatment="treated",
             time="period",
-            post_periods=[3, 4, 5]
+            post_periods=[3, 4, 5],
+            reference_period=2,
         )
 
         # Average ATT CI
@@ -1660,22 +1665,20 @@ class TestMultiPeriodDiD:
             for period in [0, 1]:
                 y = 10.0 + (3.0 if is_treated and period == 1 else 0)
                 y += np.random.normal(0, 0.5)
-                data.append({
-                    "unit": unit,
-                    "period": period,
-                    "treated": int(is_treated),
-                    "outcome": y,
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": period,
+                        "treated": int(is_treated),
+                        "outcome": y,
+                    }
+                )
 
         df = pd.DataFrame(data)
 
         did = MultiPeriodDiD()
         results = did.fit(
-            df,
-            outcome="outcome",
-            treatment="treated",
-            time="period",
-            post_periods=[1]
+            df, outcome="outcome", treatment="treated", time="period", post_periods=[1]
         )
 
         assert len(results.period_effects) == 1
@@ -1694,12 +1697,14 @@ class TestMultiPeriodDiD:
                 if is_treated and period >= 10:
                     y += 2.5
                 y += np.random.normal(0, 0.3)
-                data.append({
-                    "unit": unit,
-                    "period": period,
-                    "treated": int(is_treated),
-                    "outcome": y,
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": period,
+                        "treated": int(is_treated),
+                        "outcome": y,
+                    }
+                )
 
         df = pd.DataFrame(data)
 
@@ -1709,10 +1714,11 @@ class TestMultiPeriodDiD:
             outcome="outcome",
             treatment="treated",
             time="period",
-            post_periods=list(range(10, 20))
+            post_periods=list(range(10, 20)),
+            reference_period=9,
         )
 
-        assert len(results.period_effects) == 10
+        assert len(results.period_effects) == 19  # 9 pre + 10 post (ref=9 excluded)
         assert len(results.pre_periods) == 10
         assert abs(results.avg_att - 2.5) < 0.5
 
@@ -1724,7 +1730,8 @@ class TestMultiPeriodDiD:
             outcome="outcome",
             treatment="treated",
             time="period",
-            post_periods=[3, 4, 5]
+            post_periods=[3, 4, 5],
+            reference_period=2,
         )
 
         assert results.r_squared is not None
@@ -1738,7 +1745,8 @@ class TestMultiPeriodDiD:
             outcome="outcome",
             treatment="treated",
             time="period",
-            post_periods=[3, 4, 5]
+            post_periods=[3, 4, 5],
+            reference_period=2,
         )
 
         # Should have treatment, period dummies, and interactions
@@ -1768,18 +1776,23 @@ class TestMultiPeriodDiD:
                 treatment="treated",
                 time="period",
                 post_periods=[3, 4, 5],
-                covariates=["collinear_cov"]
+                reference_period=2,
+                covariates=["collinear_cov"],
             )
 
         # Should have warning about rank deficiency
-        rank_warnings = [x for x in w if "Rank-deficient" in str(x.message)
-                        or "collinear" in str(x.message).lower()]
+        rank_warnings = [
+            x
+            for x in w
+            if "Rank-deficient" in str(x.message) or "collinear" in str(x.message).lower()
+        ]
         assert len(rank_warnings) > 0, "Expected warning about rank deficiency"
 
         # The collinear covariate should have NaN coefficient
         assert "collinear_cov" in results.coefficients
-        assert np.isnan(results.coefficients["collinear_cov"]), \
-            "Collinear covariate coefficient should be NaN"
+        assert np.isnan(
+            results.coefficients["collinear_cov"]
+        ), "Collinear covariate coefficient should be NaN"
 
         # Treatment effects should still be identified (not NaN)
         for period in [3, 4, 5]:
@@ -1793,7 +1806,9 @@ class TestMultiPeriodDiD:
         assert np.any(np.isnan(results.vcov)), "Vcov should have NaN for dropped column"
 
         # avg_att should still be computed because all period effects are identified
-        assert not np.isnan(results.avg_att), "avg_att should be valid when all period effects are identified"
+        assert not np.isnan(
+            results.avg_att
+        ), "avg_att should be valid when all period effects are identified"
 
     def test_avg_att_nan_when_period_effect_nan(self, multi_period_data):
         """Test that avg_att is NaN if any period effect is NaN (R-style NA propagation)."""
@@ -1814,12 +1829,16 @@ class TestMultiPeriodDiD:
                 outcome="outcome",
                 treatment="treated",
                 time="period",
-                post_periods=[3, 4, 5]
+                post_periods=[3, 4, 5],
+                reference_period=2,
             )
 
         # Should have warning about rank deficiency (treated:period_3 is all zeros)
-        rank_warnings = [x for x in w if "Rank-deficient" in str(x.message)
-                        or "collinear" in str(x.message).lower()]
+        rank_warnings = [
+            x
+            for x in w
+            if "Rank-deficient" in str(x.message) or "collinear" in str(x.message).lower()
+        ]
         assert len(rank_warnings) > 0, "Expected warning about rank deficiency"
 
         # The treated×period_3 interaction should have NaN coefficient (unidentified)
@@ -1846,7 +1865,8 @@ class TestMultiPeriodDiD:
                 treatment="treated",
                 time="period",
                 post_periods=[3, 4, 5],
-                covariates=["collinear_cov"]
+                reference_period=2,
+                covariates=["collinear_cov"],
             )
 
     def test_rank_deficient_action_silent_no_warning(self, multi_period_data):
@@ -1867,18 +1887,278 @@ class TestMultiPeriodDiD:
                 treatment="treated",
                 time="period",
                 post_periods=[3, 4, 5],
-                covariates=["collinear_cov"]
+                reference_period=2,
+                covariates=["collinear_cov"],
             )
 
             # No warnings about rank deficiency should be emitted
-            rank_warnings = [x for x in w if "Rank-deficient" in str(x.message)
-                           or "rank-deficient" in str(x.message).lower()]
+            rank_warnings = [
+                x
+                for x in w
+                if "Rank-deficient" in str(x.message) or "rank-deficient" in str(x.message).lower()
+            ]
             assert len(rank_warnings) == 0, f"Expected no rank warnings, got {rank_warnings}"
 
         # Should still have NaN for dropped coefficient
         assert "collinear_cov" in results.coefficients
-        assert np.isnan(results.coefficients["collinear_cov"]), \
-            "Collinear covariate coefficient should be NaN"
+        assert np.isnan(
+            results.coefficients["collinear_cov"]
+        ), "Collinear covariate coefficient should be NaN"
+
+
+class TestMultiPeriodDiDEventStudy:
+    """Tests for MultiPeriodDiD full event-study specification (pre + post periods)."""
+
+    @pytest.fixture
+    def panel_data(self):
+        """Panel data with 6 periods, treatment at period 3."""
+        np.random.seed(42)
+        data = []
+        for unit in range(100):
+            is_treated = unit < 50
+            for period in range(6):
+                y = 10.0 + period * 0.5
+                if is_treated and period >= 3:
+                    y += 3.0
+                y += np.random.normal(0, 0.5)
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": period,
+                        "treated": int(is_treated),
+                        "outcome": y,
+                    }
+                )
+        return pd.DataFrame(data)
+
+    def test_default_reference_period_is_last_pre(self, panel_data):
+        """Verify reference_period defaults to the last pre-period."""
+        import warnings
+
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("always")
+            did = MultiPeriodDiD()
+            results = did.fit(
+                panel_data,
+                outcome="outcome",
+                treatment="treated",
+                time="period",
+                post_periods=[3, 4, 5],
+            )
+        assert results.reference_period == 2  # last pre-period
+
+    def test_reference_period_future_warning(self, panel_data):
+        """Verify FutureWarning is emitted when reference_period is None."""
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            MultiPeriodDiD().fit(
+                panel_data,
+                outcome="outcome",
+                treatment="treated",
+                time="period",
+                post_periods=[3, 4, 5],
+            )
+        future_warnings = [x for x in w if issubclass(x.category, FutureWarning)]
+        assert len(future_warnings) > 0, "Expected FutureWarning for reference_period default"
+        assert "reference_period" in str(future_warnings[0].message)
+
+    def test_pre_period_effects_near_zero(self, panel_data):
+        """Under parallel trends DGP, pre-period effects should be ~0."""
+        results = MultiPeriodDiD().fit(
+            panel_data,
+            outcome="outcome",
+            treatment="treated",
+            time="period",
+            post_periods=[3, 4, 5],
+            reference_period=2,
+        )
+        for period in [0, 1]:
+            pe = results.period_effects[period]
+            assert (
+                abs(pe.effect) < 0.5
+            ), f"Pre-period {period} effect should be near zero, got {pe.effect}"
+
+    def test_reference_period_excluded_from_effects(self, panel_data):
+        """Reference period should not be a key in period_effects."""
+        results = MultiPeriodDiD().fit(
+            panel_data,
+            outcome="outcome",
+            treatment="treated",
+            time="period",
+            post_periods=[3, 4, 5],
+            reference_period=2,
+        )
+        assert 2 not in results.period_effects
+
+    def test_reference_period_stored_in_results(self, panel_data):
+        """Results.reference_period should match the chosen reference."""
+        results = MultiPeriodDiD().fit(
+            panel_data,
+            outcome="outcome",
+            treatment="treated",
+            time="period",
+            post_periods=[3, 4, 5],
+            reference_period=1,
+        )
+        assert results.reference_period == 1
+
+    def test_reference_period_in_post_warns(self, panel_data):
+        """Setting reference_period to a post-period should emit warning."""
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            MultiPeriodDiD().fit(
+                panel_data,
+                outcome="outcome",
+                treatment="treated",
+                time="period",
+                post_periods=[3, 4, 5],
+                reference_period=4,
+            )
+        post_ref_warnings = [x for x in w if "post-treatment period" in str(x.message)]
+        assert len(post_ref_warnings) > 0, "Expected warning about post-period reference"
+
+    def test_staggered_treatment_warning(self):
+        """Staggered treatment timing with unit param should emit warning."""
+        np.random.seed(42)
+        data = []
+        for unit in range(40):
+            if unit < 10:
+                treat_start = 3
+            elif unit < 20:
+                treat_start = 5
+            else:
+                treat_start = None
+            for period in range(8):
+                is_treated = treat_start is not None and period >= treat_start
+                y = 10.0 + period * 0.5 + (2.0 if is_treated else 0)
+                y += np.random.normal(0, 0.3)
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": period,
+                        "treated": int(is_treated),
+                        "outcome": y,
+                    }
+                )
+        df = pd.DataFrame(data)
+
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            MultiPeriodDiD().fit(
+                df,
+                outcome="outcome",
+                treatment="treated",
+                time="period",
+                post_periods=[3, 4, 5, 6, 7],
+                reference_period=2,
+                unit="unit",
+            )
+        staggered_warnings = [x for x in w if "staggered" in str(x.message).lower()]
+        assert len(staggered_warnings) > 0, "Expected staggered adoption warning"
+
+    def test_unit_param_without_unit_column_raises(self, panel_data):
+        """unit='nonexistent' should raise ValueError."""
+        with pytest.raises(ValueError, match="not found in data"):
+            MultiPeriodDiD().fit(
+                panel_data,
+                outcome="outcome",
+                treatment="treated",
+                time="period",
+                post_periods=[3, 4, 5],
+                reference_period=2,
+                unit="nonexistent",
+            )
+
+    def test_avg_att_uses_only_post_periods(self, panel_data):
+        """avg_att should be the mean of post-period effects only."""
+        results = MultiPeriodDiD().fit(
+            panel_data,
+            outcome="outcome",
+            treatment="treated",
+            time="period",
+            post_periods=[3, 4, 5],
+            reference_period=2,
+        )
+        post_effects = [results.period_effects[p].effect for p in [3, 4, 5]]
+        assert abs(results.avg_att - np.mean(post_effects)) < 1e-10
+
+    def test_pre_period_effects_property(self, panel_data):
+        """results.pre_period_effects returns correct subset."""
+        results = MultiPeriodDiD().fit(
+            panel_data,
+            outcome="outcome",
+            treatment="treated",
+            time="period",
+            post_periods=[3, 4, 5],
+            reference_period=2,
+        )
+        pre = results.pre_period_effects
+        assert set(pre.keys()) == {0, 1}
+
+    def test_post_period_effects_property(self, panel_data):
+        """results.post_period_effects returns correct subset."""
+        results = MultiPeriodDiD().fit(
+            panel_data,
+            outcome="outcome",
+            treatment="treated",
+            time="period",
+            post_periods=[3, 4, 5],
+            reference_period=2,
+        )
+        post = results.post_period_effects
+        assert set(post.keys()) == {3, 4, 5}
+
+    def test_to_dataframe_has_is_post_column(self, panel_data):
+        """to_dataframe() should include is_post column."""
+        results = MultiPeriodDiD().fit(
+            panel_data,
+            outcome="outcome",
+            treatment="treated",
+            time="period",
+            post_periods=[3, 4, 5],
+            reference_period=2,
+        )
+        df = results.to_dataframe()
+        assert "is_post" in df.columns
+        assert df["is_post"].sum() == 3
+        assert (~df["is_post"]).sum() == 2
+
+    def test_interaction_indices_stored(self, panel_data):
+        """results.interaction_indices should be populated."""
+        results = MultiPeriodDiD().fit(
+            panel_data,
+            outcome="outcome",
+            treatment="treated",
+            time="period",
+            post_periods=[3, 4, 5],
+            reference_period=2,
+        )
+        assert results.interaction_indices is not None
+        assert set(results.interaction_indices.keys()) == {0, 1, 3, 4, 5}
+        # Each value should be a valid column index
+        for period, idx in results.interaction_indices.items():
+            assert isinstance(idx, int)
+            assert idx >= 0
+
+    def test_to_dict_has_reference_period(self, panel_data):
+        """to_dict() should include reference_period."""
+        results = MultiPeriodDiD().fit(
+            panel_data,
+            outcome="outcome",
+            treatment="treated",
+            time="period",
+            post_periods=[3, 4, 5],
+            reference_period=2,
+        )
+        d = results.to_dict()
+        assert "reference_period" in d
+        assert d["reference_period"] == 2
 
 
 class TestSyntheticDiD:
@@ -1910,12 +2190,14 @@ class TestSyntheticDiD:
 
                 y += np.random.normal(0, 0.5)
 
-                data.append({
-                    "unit": unit,
-                    "period": period,
-                    "treated": int(is_treated),
-                    "outcome": y,
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": period,
+                        "treated": int(is_treated),
+                        "outcome": y,
+                    }
+                )
 
         return pd.DataFrame(data)
 
@@ -1934,12 +2216,14 @@ class TestSyntheticDiD:
             if period >= 5:
                 y += 10.0  # True ATT = 10
             y += np.random.normal(0, 1)
-            data.append({
-                "unit": 0,
-                "period": period,
-                "treated": 1,
-                "outcome": y,
-            })
+            data.append(
+                {
+                    "unit": 0,
+                    "period": period,
+                    "treated": 1,
+                    "outcome": y,
+                }
+            )
 
         # Control units with various patterns
         for unit in range(1, n_controls + 1):
@@ -1948,12 +2232,14 @@ class TestSyntheticDiD:
             for period in range(n_periods):
                 y = unit_intercept + period * unit_slope
                 y += np.random.normal(0, 1)
-                data.append({
-                    "unit": unit,
-                    "period": period,
-                    "treated": 0,
-                    "outcome": y,
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": period,
+                        "treated": 0,
+                        "outcome": y,
+                    }
+                )
 
         return pd.DataFrame(data)
 
@@ -1966,7 +2252,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=[4, 5, 6, 7]
+            post_periods=[4, 5, 6, 7],
         )
 
         assert isinstance(results, SyntheticDiDResults)
@@ -1984,7 +2270,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=[4, 5, 6, 7]
+            post_periods=[4, 5, 6, 7],
         )
 
         # True ATT is 5.0
@@ -2000,7 +2286,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=[4, 5, 6, 7]
+            post_periods=[4, 5, 6, 7],
         )
 
         weight_sum = sum(results.unit_weights.values())
@@ -2015,7 +2301,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=[4, 5, 6, 7]
+            post_periods=[4, 5, 6, 7],
         )
 
         weight_sum = sum(results.time_weights.values())
@@ -2030,7 +2316,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=[4, 5, 6, 7]
+            post_periods=[4, 5, 6, 7],
         )
 
         for w in results.unit_weights.values():
@@ -2045,7 +2331,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=[5, 6, 7, 8, 9]
+            post_periods=[5, 6, 7, 8, 9],
         )
 
         assert results.n_treated == 1
@@ -2065,7 +2351,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=[4, 5, 6, 7]
+            post_periods=[4, 5, 6, 7],
         )
 
         results_high_reg = sdid_high_reg.fit(
@@ -2074,7 +2360,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=[4, 5, 6, 7]
+            post_periods=[4, 5, 6, 7],
         )
 
         # High regularization should give more uniform weights
@@ -2093,7 +2379,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=[4, 5, 6, 7]
+            post_periods=[4, 5, 6, 7],
         )
 
         assert results.variance_method == "placebo"
@@ -2110,7 +2396,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=[4, 5, 6, 7]
+            post_periods=[4, 5, 6, 7],
         )
 
         assert results.variance_method == "bootstrap"
@@ -2132,7 +2418,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=[4, 5, 6, 7]
+            post_periods=[4, 5, 6, 7],
         )
 
         weights_df = results.get_unit_weights_df()
@@ -2150,7 +2436,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=[4, 5, 6, 7]
+            post_periods=[4, 5, 6, 7],
         )
 
         weights_df = results.get_time_weights_df()
@@ -2168,7 +2454,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=[4, 5, 6, 7]
+            post_periods=[4, 5, 6, 7],
         )
 
         assert results.pre_treatment_fit is not None
@@ -2183,7 +2469,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=[4, 5, 6, 7]
+            post_periods=[4, 5, 6, 7],
         )
 
         summary = results.summary()
@@ -2201,7 +2487,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=[4, 5, 6, 7]
+            post_periods=[4, 5, 6, 7],
         )
 
         result_dict = results.to_dict()
@@ -2220,7 +2506,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=[4, 5, 6, 7]
+            post_periods=[4, 5, 6, 7],
         )
 
         df = results.to_dataframe()
@@ -2237,7 +2523,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=[4, 5, 6, 7]
+            post_periods=[4, 5, 6, 7],
         )
 
         repr_str = repr(results)
@@ -2253,7 +2539,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=[4, 5, 6, 7]
+            post_periods=[4, 5, 6, 7],
         )
 
         assert isinstance(results.is_significant, bool)
@@ -2284,7 +2570,7 @@ class TestSyntheticDiD:
                 treatment="treated",
                 unit="nonexistent",
                 time="period",
-                post_periods=[4, 5, 6, 7]
+                post_periods=[4, 5, 6, 7],
             )
 
     def test_missing_time_column(self, sdid_panel_data):
@@ -2297,17 +2583,19 @@ class TestSyntheticDiD:
                 treatment="treated",
                 unit="unit",
                 time="nonexistent",
-                post_periods=[4, 5, 6, 7]
+                post_periods=[4, 5, 6, 7],
             )
 
     def test_no_treated_units_error(self):
         """Test error when no treated units."""
-        data = pd.DataFrame({
-            "unit": [1, 1, 2, 2],
-            "period": [0, 1, 0, 1],
-            "treated": [0, 0, 0, 0],
-            "outcome": [10, 11, 12, 13],
-        })
+        data = pd.DataFrame(
+            {
+                "unit": [1, 1, 2, 2],
+                "period": [0, 1, 0, 1],
+                "treated": [0, 0, 0, 0],
+                "outcome": [10, 11, 12, 13],
+            }
+        )
 
         sdid = SyntheticDiD()
         with pytest.raises(ValueError, match="No treated units"):
@@ -2317,17 +2605,19 @@ class TestSyntheticDiD:
                 treatment="treated",
                 unit="unit",
                 time="period",
-                post_periods=[1]
+                post_periods=[1],
             )
 
     def test_no_control_units_error(self):
         """Test error when no control units."""
-        data = pd.DataFrame({
-            "unit": [1, 1, 2, 2],
-            "period": [0, 1, 0, 1],
-            "treated": [1, 1, 1, 1],
-            "outcome": [10, 11, 12, 13],
-        })
+        data = pd.DataFrame(
+            {
+                "unit": [1, 1, 2, 2],
+                "period": [0, 1, 0, 1],
+                "treated": [1, 1, 1, 1],
+                "outcome": [10, 11, 12, 13],
+            }
+        )
 
         sdid = SyntheticDiD()
         with pytest.raises(ValueError, match="No control units"):
@@ -2337,7 +2627,7 @@ class TestSyntheticDiD:
                 treatment="treated",
                 unit="unit",
                 time="period",
-                post_periods=[1]
+                post_periods=[1],
             )
 
     def test_auto_infer_post_periods(self, sdid_panel_data):
@@ -2348,7 +2638,7 @@ class TestSyntheticDiD:
             outcome="outcome",
             treatment="treated",
             unit="unit",
-            time="period"
+            time="period",
             # post_periods not specified
         )
 
@@ -2369,7 +2659,7 @@ class TestSyntheticDiD:
             unit="unit",
             time="period",
             post_periods=[4, 5, 6, 7],
-            covariates=["size"]
+            covariates=["size"],
         )
 
         assert results is not None
@@ -2384,7 +2674,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=[4, 5, 6, 7]
+            post_periods=[4, 5, 6, 7],
         )
 
         lower, upper = results.conf_int
@@ -2398,7 +2688,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=[4, 5, 6, 7]
+            post_periods=[4, 5, 6, 7],
         )
 
         results2 = SyntheticDiD(n_bootstrap=50, seed=42).fit(
@@ -2407,7 +2697,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=[4, 5, 6, 7]
+            post_periods=[4, 5, 6, 7],
         )
 
         assert results1.att == results2.att
@@ -2428,23 +2718,27 @@ class TestSyntheticDiD:
             y = 10.0 + t * 0.5 + np.random.normal(0, 0.3)
             if t in post_periods:
                 y += 3.0
-            data.append({
-                "unit": 0,
-                "period": t,
-                "outcome": y,
-                "treated": 1,
-            })
+            data.append(
+                {
+                    "unit": 0,
+                    "period": t,
+                    "outcome": y,
+                    "treated": 1,
+                }
+            )
 
         # Control units
         for unit in range(1, n_control + 1):
             for t in range(n_periods):
                 y = 8.0 + unit * 0.2 + t * 0.4 + np.random.normal(0, 0.3)
-                data.append({
-                    "unit": unit,
-                    "period": t,
-                    "outcome": y,
-                    "treated": 0,
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": t,
+                        "outcome": y,
+                        "treated": 0,
+                    }
+                )
 
         df = pd.DataFrame(data)
 
@@ -2458,7 +2752,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=post_periods
+            post_periods=post_periods,
         )
 
         # Results should still be valid
@@ -2479,23 +2773,27 @@ class TestSyntheticDiD:
             y = 10.0 + np.random.normal(0, 0.2)
             if t in post_periods:
                 y += 2.0
-            data.append({
-                "unit": 0,
-                "period": t,
-                "outcome": y,
-                "treated": 1,
-            })
+            data.append(
+                {
+                    "unit": 0,
+                    "period": t,
+                    "outcome": y,
+                    "treated": 1,
+                }
+            )
 
         # Control units
         for unit in range(1, n_control + 1):
             for t in range(n_periods):
                 y = 9.0 + np.random.normal(0, 0.2)
-                data.append({
-                    "unit": unit,
-                    "period": t,
-                    "outcome": y,
-                    "treated": 0,
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": t,
+                        "outcome": y,
+                        "treated": 0,
+                    }
+                )
 
         df = pd.DataFrame(data)
 
@@ -2508,7 +2806,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=post_periods
+            post_periods=post_periods,
         )
 
         # Should still produce results
@@ -2530,23 +2828,27 @@ class TestSyntheticDiD:
             y = 10.0 + t * 0.2 + np.random.normal(0, 0.3)
             if t in post_periods:
                 y += 2.5
-            data.append({
-                "unit": 0,
-                "period": t,
-                "outcome": y,
-                "treated": 1,
-            })
+            data.append(
+                {
+                    "unit": 0,
+                    "period": t,
+                    "outcome": y,
+                    "treated": 1,
+                }
+            )
 
         # Control units
         for unit in range(1, n_control + 1):
             for t in range(n_periods):
                 y = 8.0 + t * 0.15 + np.random.normal(0, 0.3)
-                data.append({
-                    "unit": unit,
-                    "period": t,
-                    "outcome": y,
-                    "treated": 0,
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": t,
+                        "outcome": y,
+                        "treated": 0,
+                    }
+                )
 
         df = pd.DataFrame(data)
 
@@ -2559,7 +2861,7 @@ class TestSyntheticDiD:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=post_periods
+            post_periods=post_periods,
         )
 
         # Should produce valid results with regularization
@@ -2646,9 +2948,7 @@ class TestSyntheticWeightsUtils:
         time_weights = np.array([0.5, 0.5])
 
         tau = compute_sdid_estimator(
-            Y_pre_control, Y_post_control,
-            Y_pre_treated, Y_post_treated,
-            unit_weights, time_weights
+            Y_pre_control, Y_post_control, Y_pre_treated, Y_post_treated, unit_weights, time_weights
         )
 
         # Treated: 15 - 10 = 5
@@ -2688,23 +2988,20 @@ class TestUnbalancedPanels:
                     y += 3.0
                 y += np.random.normal(0, 1)
 
-                data.append({
-                    "unit": unit,
-                    "period": period,
-                    "treated": int(is_treated),
-                    "post": period,
-                    "outcome": y,
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": period,
+                        "treated": int(is_treated),
+                        "post": period,
+                        "outcome": y,
+                    }
+                )
 
         df = pd.DataFrame(data)
 
         did = DifferenceInDifferences()
-        results = did.fit(
-            df,
-            outcome="outcome",
-            treatment="treated",
-            time="post"
-        )
+        results = did.fit(df, outcome="outcome", treatment="treated", time="post")
 
         # Should still produce valid results
         assert np.isfinite(results.att)
@@ -2739,24 +3036,20 @@ class TestUnbalancedPanels:
                     y += 3.0
                 y += np.random.normal(0, 0.5)
 
-                data.append({
-                    "unit": unit,
-                    "period": period,
-                    "treated": int(is_treated),
-                    "post": post,
-                    "outcome": y,
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": period,
+                        "treated": int(is_treated),
+                        "post": post,
+                        "outcome": y,
+                    }
+                )
 
         df = pd.DataFrame(data)
 
         twfe = TwoWayFixedEffects()
-        results = twfe.fit(
-            df,
-            outcome="outcome",
-            treatment="post",
-            unit="unit",
-            time="period"
-        )
+        results = twfe.fit(df, outcome="outcome", treatment="post", unit="unit", time="period")
 
         # Should produce valid results
         assert np.isfinite(results.att)
@@ -2782,22 +3075,20 @@ class TestUnbalancedPanels:
                 if is_treated and period >= 2:
                     y += 3.0  # Treatment effect
 
-                data.append({
-                    "unit": unit,
-                    "period": period,
-                    "treated": int(is_treated),
-                    "outcome": y,
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": period,
+                        "treated": int(is_treated),
+                        "outcome": y,
+                    }
+                )
 
         df = pd.DataFrame(data)
 
         mp_did = MultiPeriodDiD()
         results = mp_did.fit(
-            df,
-            outcome="outcome",
-            treatment="treated",
-            time="period",
-            reference_period=1
+            df, outcome="outcome", treatment="treated", time="period", reference_period=1
         )
 
         # Should produce valid results
@@ -2824,23 +3115,20 @@ class TestSingleTreatedUnit:
                 if is_treated and period == 1:
                     y += 5.0  # Large effect for single unit
 
-                data.append({
-                    "unit": unit,
-                    "period": period,
-                    "treated": int(is_treated),
-                    "post": period,
-                    "outcome": y,
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": period,
+                        "treated": int(is_treated),
+                        "post": period,
+                        "outcome": y,
+                    }
+                )
 
         df = pd.DataFrame(data)
 
         did = DifferenceInDifferences()
-        results = did.fit(
-            df,
-            outcome="outcome",
-            treatment="treated",
-            time="post"
-        )
+        results = did.fit(df, outcome="outcome", treatment="treated", time="post")
 
         # Should produce valid results
         assert np.isfinite(results.att)
@@ -2864,12 +3152,14 @@ class TestSingleTreatedUnit:
             y = treated_base + treated_trend * t + np.random.normal(0, 0.3)
             if t in post_periods:
                 y += 3.0  # Treatment effect
-            data.append({
-                "unit": 0,
-                "period": t,
-                "outcome": y,
-                "treated": 1,
-            })
+            data.append(
+                {
+                    "unit": 0,
+                    "period": t,
+                    "outcome": y,
+                    "treated": 1,
+                }
+            )
 
         # Generate control units
         for unit in range(1, n_control + 1):
@@ -2877,12 +3167,14 @@ class TestSingleTreatedUnit:
             unit_trend = 0.4 + np.random.normal(0, 0.1)
             for t in range(n_periods):
                 y = unit_base + unit_trend * t + np.random.normal(0, 0.3)
-                data.append({
-                    "unit": unit,
-                    "period": t,
-                    "outcome": y,
-                    "treated": 0,
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": t,
+                        "outcome": y,
+                        "treated": 0,
+                    }
+                )
 
         df = pd.DataFrame(data)
 
@@ -2893,7 +3185,7 @@ class TestSingleTreatedUnit:
             treatment="treated",
             unit="unit",
             time="period",
-            post_periods=post_periods
+            post_periods=post_periods,
         )
 
         # SDID is designed for single/few treated units
@@ -2916,12 +3208,14 @@ class TestCollinearityDetection:
         import warnings
 
         np.random.seed(42)
-        data = pd.DataFrame({
-            "outcome": np.random.normal(10, 1, 100),
-            "treated": np.repeat([0, 1], 50),
-            "post": np.tile([0, 1], 50),
-            "x1": np.random.normal(0, 1, 100),
-        })
+        data = pd.DataFrame(
+            {
+                "outcome": np.random.normal(10, 1, 100),
+                "treated": np.repeat([0, 1], 50),
+                "post": np.tile([0, 1], 50),
+                "x1": np.random.normal(0, 1, 100),
+            }
+        )
         # Add perfectly collinear covariate
         data["x2"] = data["x1"] * 2 + 3
 
@@ -2931,11 +3225,7 @@ class TestCollinearityDetection:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             result = did.fit(
-                data,
-                outcome="outcome",
-                treatment="treated",
-                time="post",
-                covariates=["x1", "x2"]
+                data, outcome="outcome", treatment="treated", time="post", covariates=["x1", "x2"]
             )
             # Should emit a warning about rank deficiency
             rank_warnings = [x for x in w if "Rank-deficient" in str(x.message)]
@@ -2954,12 +3244,14 @@ class TestCollinearityDetection:
         import warnings
 
         np.random.seed(42)
-        data = pd.DataFrame({
-            "outcome": np.random.normal(10, 1, 100),
-            "treated": np.repeat([0, 1], 50),
-            "post": np.tile([0, 1], 50),
-            "constant_x": np.ones(100),  # Constant covariate
-        })
+        data = pd.DataFrame(
+            {
+                "outcome": np.random.normal(10, 1, 100),
+                "treated": np.repeat([0, 1], 50),
+                "post": np.tile([0, 1], 50),
+                "constant_x": np.ones(100),  # Constant covariate
+            }
+        )
 
         did = DifferenceInDifferences()
 
@@ -2968,11 +3260,7 @@ class TestCollinearityDetection:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             result = did.fit(
-                data,
-                outcome="outcome",
-                treatment="treated",
-                time="post",
-                covariates=["constant_x"]
+                data, outcome="outcome", treatment="treated", time="post", covariates=["constant_x"]
             )
             # Should emit a warning about rank deficiency
             rank_warnings = [x for x in w if "Rank-deficient" in str(x.message)]
@@ -2984,12 +3272,14 @@ class TestCollinearityDetection:
     def test_did_with_near_collinear_covariates(self):
         """Test DiD handles near-collinear covariates (not perfectly collinear)."""
         np.random.seed(42)
-        data = pd.DataFrame({
-            "outcome": np.random.normal(10, 1, 100),
-            "treated": np.repeat([0, 1], 50),
-            "post": np.tile([0, 1], 50),
-            "x1": np.random.normal(0, 1, 100),
-        })
+        data = pd.DataFrame(
+            {
+                "outcome": np.random.normal(10, 1, 100),
+                "treated": np.repeat([0, 1], 50),
+                "post": np.tile([0, 1], 50),
+                "x1": np.random.normal(0, 1, 100),
+            }
+        )
         # Add near-collinear covariate (small noise breaks perfect collinearity)
         data["x2"] = data["x1"] * 2 + 3 + np.random.normal(0, 0.1, 100)
 
@@ -2997,11 +3287,7 @@ class TestCollinearityDetection:
 
         # Near-collinear should work (not perfectly rank-deficient)
         results = did.fit(
-            data,
-            outcome="outcome",
-            treatment="treated",
-            time="post",
-            covariates=["x1", "x2"]
+            data, outcome="outcome", treatment="treated", time="post", covariates=["x1", "x2"]
         )
 
         assert np.isfinite(results.att)
@@ -3025,26 +3311,22 @@ class TestCollinearityDetection:
                 if unit < n_units // 2 and post:
                     y += 2.0
 
-                data.append({
-                    "unit": unit,
-                    "period": period,
-                    "outcome": y,
-                    "treated": int(unit < n_units // 2),
-                    "post": post,
-                    "unit_covariate": unit_x,  # Same for all periods within unit
-                })
+                data.append(
+                    {
+                        "unit": unit,
+                        "period": period,
+                        "outcome": y,
+                        "treated": int(unit < n_units // 2),
+                        "post": post,
+                        "unit_covariate": unit_x,  # Same for all periods within unit
+                    }
+                )
 
         df = pd.DataFrame(data)
 
         twfe = TwoWayFixedEffects()
         # unit_covariate is absorbed by unit fixed effects
-        results = twfe.fit(
-            df,
-            outcome="outcome",
-            treatment="post",
-            unit="unit",
-            time="period"
-        )
+        results = twfe.fit(df, outcome="outcome", treatment="post", unit="unit", time="period")
 
         assert np.isfinite(results.att)
         assert results.se > 0

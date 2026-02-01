@@ -32,11 +32,13 @@ def generate_multi_period_data(n_obs: int = 200, seed: int = 42) -> pd.DataFrame
 
                 y += np.random.randn() * 0.5
 
-                data.append({
-                    'outcome': y,
-                    'treated': treated,
-                    'period': period,
-                })
+                data.append(
+                    {
+                        "outcome": y,
+                        "treated": treated,
+                        "period": period,
+                    }
+                )
 
     return pd.DataFrame(data)
 
@@ -67,12 +69,14 @@ def generate_staggered_data(
 
     outcomes = unit_fe_expanded + 0.5 * times + 2.0 * post + np.random.randn(len(units)) * 0.3
 
-    return pd.DataFrame({
-        'unit': units,
-        'time': times,
-        'outcome': outcomes,
-        'first_treat': first_treat_expanded.astype(int),
-    })
+    return pd.DataFrame(
+        {
+            "unit": units,
+            "time": times,
+            "outcome": outcomes,
+            "first_treat": first_treat_expanded.astype(int),
+        }
+    )
 
 
 class TestPlotEventStudy:
@@ -85,10 +89,11 @@ class TestPlotEventStudy:
         did = MultiPeriodDiD()
         return did.fit(
             data,
-            outcome='outcome',
-            treatment='treated',
-            time='period',
-            post_periods=[2, 3]
+            outcome="outcome",
+            treatment="treated",
+            time="period",
+            post_periods=[2, 3],
+            reference_period=1,
         )
 
     @pytest.fixture
@@ -98,11 +103,11 @@ class TestPlotEventStudy:
         cs = CallawaySantAnna()
         return cs.fit(
             data,
-            outcome='outcome',
-            unit='unit',
-            time='time',
-            first_treat='first_treat',
-            aggregate='event_study'
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
+            aggregate="event_study",
         )
 
     def test_plot_from_multi_period_results(self, multi_period_results):
@@ -123,11 +128,13 @@ class TestPlotEventStudy:
         """Test plotting from DataFrame."""
         pytest.importorskip("matplotlib")
 
-        df = pd.DataFrame({
-            'period': [-2, -1, 0, 1, 2],
-            'effect': [0.1, 0.05, 0.0, 0.5, 0.6],
-            'se': [0.1, 0.1, 0.0, 0.15, 0.15]
-        })
+        df = pd.DataFrame(
+            {
+                "period": [-2, -1, 0, 1, 2],
+                "effect": [0.1, 0.05, 0.0, 0.5, 0.6],
+                "se": [0.1, 0.1, 0.0, 0.15, 0.15],
+            }
+        )
 
         ax = plot_event_study(df, reference_period=0, show=False)
         assert ax is not None
@@ -139,12 +146,7 @@ class TestPlotEventStudy:
         effects = {-2: 0.1, -1: 0.05, 0: 0.0, 1: 0.5, 2: 0.6}
         se = {-2: 0.1, -1: 0.1, 0: 0.0, 1: 0.15, 2: 0.15}
 
-        ax = plot_event_study(
-            effects=effects,
-            se=se,
-            reference_period=0,
-            show=False
-        )
+        ax = plot_event_study(effects=effects, se=se, reference_period=0, show=False)
         assert ax is not None
 
     def test_plot_customization(self, multi_period_results):
@@ -159,7 +161,7 @@ class TestPlotEventStudy:
             color="red",
             marker="s",
             markersize=10,
-            show=False
+            show=False,
         )
 
         assert ax.get_title() == "Custom Title"
@@ -170,11 +172,7 @@ class TestPlotEventStudy:
         """Test disabling zero line."""
         pytest.importorskip("matplotlib")
 
-        ax = plot_event_study(
-            multi_period_results,
-            show_zero_line=False,
-            show=False
-        )
+        ax = plot_event_study(multi_period_results, show_zero_line=False, show=False)
         assert ax is not None
 
     def test_plot_with_existing_axes(self, multi_period_results):
@@ -208,10 +206,7 @@ class TestPlotEventStudy:
     def test_error_missing_dataframe_columns(self):
         """Test error with missing DataFrame columns."""
         pytest.importorskip("matplotlib")
-        df = pd.DataFrame({
-            'x': [1, 2, 3],
-            'y': [0.1, 0.2, 0.3]
-        })
+        df = pd.DataFrame({"x": [1, 2, 3], "y": [0.1, 0.2, 0.3]})
 
         with pytest.raises(ValueError, match="must have 'period' column"):
             plot_event_study(df)
@@ -236,12 +231,7 @@ class TestPlotEventStudy:
         effects = {-2: 0.1, -1: 0.0, 0: 0.5, 1: 0.6}
         se = {-2: 0.1, -1: np.nan, 0: 0.15, 1: 0.15}  # NaN SE at reference period
 
-        ax = plot_event_study(
-            effects=effects,
-            se=se,
-            reference_period=-1,
-            show=False
-        )
+        ax = plot_event_study(effects=effects, se=se, reference_period=-1, show=False)
 
         # Verify the plot was created successfully
         assert ax is not None
@@ -250,7 +240,7 @@ class TestPlotEventStudy:
         # The x-axis should have 4 tick labels
         xtick_labels = [t.get_text() for t in ax.get_xticklabels()]
         assert len(xtick_labels) == 4
-        assert '-1' in xtick_labels
+        assert "-1" in xtick_labels
 
         plt.close()
 
@@ -268,11 +258,11 @@ class TestPlotEventStudy:
         cs = CallawaySantAnna(base_period="universal")
         results = cs.fit(
             data,
-            outcome='outcome',
-            unit='unit',
-            time='period',
-            first_treat='first_treat',
-            aggregate='event_study'
+            outcome="outcome",
+            unit="unit",
+            time="period",
+            first_treat="first_treat",
+            aggregate="event_study",
         )
 
         # Should not raise even with NaN SE in reference period
@@ -281,7 +271,7 @@ class TestPlotEventStudy:
 
         # Verify reference period (-1) is in the plot
         xtick_labels = [t.get_text() for t in ax.get_xticklabels()]
-        assert '-1' in xtick_labels
+        assert "-1" in xtick_labels
 
         plt.close()
 
@@ -298,23 +288,23 @@ class TestPlotEventStudy:
         cs = CallawaySantAnna(base_period="universal", anticipation=1)
         results = cs.fit(
             data,
-            outcome='outcome',
-            unit='unit',
-            time='period',
-            first_treat='first_treat',
-            aggregate='event_study'
+            outcome="outcome",
+            unit="unit",
+            time="period",
+            first_treat="first_treat",
+            aggregate="event_study",
         )
 
         # Reference period should be at e=-2 (not e=-1) with anticipation=1
         assert -2 in results.event_study_effects
-        assert results.event_study_effects[-2]['n_groups'] == 0
+        assert results.event_study_effects[-2]["n_groups"] == 0
 
         ax = plot_event_study(results, show=False)
         assert ax is not None
 
         # Verify -2 is in the plot (the true reference period)
         xtick_labels = [t.get_text() for t in ax.get_xticklabels()]
-        assert '-2' in xtick_labels
+        assert "-2" in xtick_labels
 
         plt.close()
 
@@ -333,11 +323,13 @@ class TestPlotEventStudy:
         import matplotlib.pyplot as plt
 
         # Create data where reference period (period=0) has effect=0.3
-        df = pd.DataFrame({
-            'period': [-2, -1, 0, 1, 2],
-            'effect': [0.1, 0.2, 0.3, 0.5, 0.6],  # ref at 0 has effect 0.3
-            'se': [0.1, 0.1, 0.1, 0.1, 0.1]
-        })
+        df = pd.DataFrame(
+            {
+                "period": [-2, -1, 0, 1, 2],
+                "effect": [0.1, 0.2, 0.3, 0.5, 0.6],  # ref at 0 has effect 0.3
+                "se": [0.1, 0.1, 0.1, 0.1, 0.1],
+            }
+        )
 
         ax = plot_event_study(df, reference_period=0, show=False)
 
@@ -346,7 +338,7 @@ class TestPlotEventStudy:
         y_values = []
         for child in ax.get_children():
             # Line2D objects with single points are our markers
-            if hasattr(child, 'get_ydata'):
+            if hasattr(child, "get_ydata"):
                 ydata = child.get_ydata()
                 if len(ydata) == 1:
                     y_values.append(float(ydata[0]))
@@ -358,13 +350,15 @@ class TestPlotEventStudy:
         expected_normalized = [-0.2, -0.1, 0.0, 0.2, 0.3]
 
         # Check that reference period (0) is at y=0
-        assert 0.0 in y_values or any(abs(y) < 0.01 for y in y_values), \
-            f"Reference period should be at y=0, got y_values={y_values}"
+        assert 0.0 in y_values or any(
+            abs(y) < 0.01 for y in y_values
+        ), f"Reference period should be at y=0, got y_values={y_values}"
 
         # Verify all expected normalized values are present
         for expected in expected_normalized:
-            assert any(abs(y - expected) < 0.01 for y in y_values), \
-                f"Expected normalized value {expected} not found in {y_values}"
+            assert any(
+                abs(y - expected) < 0.01 for y in y_values
+            ), f"Expected normalized value {expected} not found in {y_values}"
 
         # Verify error bars: reference period (y=0) should have NO error bars
         # while other periods should have error bars
@@ -375,7 +369,7 @@ class TestPlotEventStudy:
         errorbar_x_coords = set()
         for child in ax.get_children():
             # ErrorbarContainer's children include LineCollection for the caps/stems
-            if hasattr(child, 'get_segments'):
+            if hasattr(child, "get_segments"):
                 segments = child.get_segments()
                 for seg in segments:
                     # Each segment is [[x1, y1], [x2, y2]]
@@ -388,14 +382,16 @@ class TestPlotEventStudy:
         reference_x = 2  # period 0 is at x-coordinate 2
 
         # Reference period should NOT have error bars (x=2 should not be in errorbar_x_coords)
-        assert reference_x not in errorbar_x_coords, \
-            f"Reference period should have no error bars but found error bar at x={reference_x}"
+        assert (
+            reference_x not in errorbar_x_coords
+        ), f"Reference period should have no error bars but found error bar at x={reference_x}"
 
         # Other periods SHOULD have error bars
         # At least some of x=0, x=1, x=3, x=4 should have error bars
         non_ref_x_coords = {0, 1, 3, 4}
-        assert len(errorbar_x_coords & non_ref_x_coords) >= 2, \
-            f"Non-reference periods should have error bars, found: {errorbar_x_coords}"
+        assert (
+            len(errorbar_x_coords & non_ref_x_coords) >= 2
+        ), f"Non-reference periods should have error bars, found: {errorbar_x_coords}"
 
         plt.close()
 
@@ -404,26 +400,23 @@ class TestPlotEventStudy:
         pytest.importorskip("matplotlib")
         import matplotlib.pyplot as plt
 
-        df = pd.DataFrame({
-            'period': [-1, 0, 1],
-            'effect': [0.1, 0.3, 0.5],
-            'se': [0.1, 0.1, 0.1]
-        })
+        df = pd.DataFrame({"period": [-1, 0, 1], "effect": [0.1, 0.3, 0.5], "se": [0.1, 0.1, 0.1]})
 
         ax = plot_event_study(df, reference_period=None, show=False)
 
         # Extract y-values
         y_values = []
         for child in ax.get_children():
-            if hasattr(child, 'get_ydata'):
+            if hasattr(child, "get_ydata"):
                 ydata = child.get_ydata()
                 if len(ydata) == 1:
                     y_values.append(float(ydata[0]))
 
         # Without normalization, original values should be preserved
         for expected in [0.1, 0.3, 0.5]:
-            assert any(abs(y - expected) < 0.01 for y in y_values), \
-                f"Original value {expected} not found in {y_values}"
+            assert any(
+                abs(y - expected) < 0.01 for y in y_values
+            ), f"Original value {expected} not found in {y_values}"
 
         plt.close()
 
@@ -432,11 +425,13 @@ class TestPlotEventStudy:
         pytest.importorskip("matplotlib")
         import matplotlib.pyplot as plt
 
-        df = pd.DataFrame({
-            'period': [-1, 0, 1],
-            'effect': [0.1, np.nan, 0.5],  # Reference period has NaN effect
-            'se': [0.1, 0.1, 0.1]
-        })
+        df = pd.DataFrame(
+            {
+                "period": [-1, 0, 1],
+                "effect": [0.1, np.nan, 0.5],  # Reference period has NaN effect
+                "se": [0.1, 0.1, 0.1],
+            }
+        )
 
         # This should not raise and should skip normalization
         ax = plot_event_study(df, reference_period=0, show=False)
@@ -444,15 +439,16 @@ class TestPlotEventStudy:
         # Extract y-values (NaN effect is skipped in plotting)
         y_values = []
         for child in ax.get_children():
-            if hasattr(child, 'get_ydata'):
+            if hasattr(child, "get_ydata"):
                 ydata = child.get_ydata()
                 if len(ydata) == 1:
                     y_values.append(float(ydata[0]))
 
         # Original non-NaN values should be preserved (not normalized)
         for expected in [0.1, 0.5]:
-            assert any(abs(y - expected) < 0.01 for y in y_values), \
-                f"Original value {expected} not found in {y_values}"
+            assert any(
+                abs(y - expected) < 0.01 for y in y_values
+            ), f"Original value {expected} not found in {y_values}"
 
         plt.close()
 
@@ -471,7 +467,7 @@ class TestPlotEventStudy:
 
         # Get original effects from results (before any normalization)
         original_effects = {
-            period: effect_data['effect']
+            period: effect_data["effect"]
             for period, effect_data in results.event_study_effects.items()
         }
 
@@ -482,7 +478,7 @@ class TestPlotEventStudy:
         # Extract plotted y-values
         y_values = []
         for child in ax.get_children():
-            if hasattr(child, 'get_ydata'):
+            if hasattr(child, "get_ydata"):
                 ydata = child.get_ydata()
                 if len(ydata) == 1:
                     y_values.append(float(ydata[0]))
@@ -498,9 +494,10 @@ class TestPlotEventStudy:
         for period, orig_effect in original_effects.items():
             if np.isfinite(orig_effect):
                 # Check that original value is present (not normalized)
-                assert any(abs(y - orig_effect) < 0.05 for y in y_values), \
-                    f"Original effect {orig_effect:.3f} for period {period} " \
+                assert any(abs(y - orig_effect) < 0.05 for y in y_values), (
+                    f"Original effect {orig_effect:.3f} for period {period} "
                     f"should be plotted without normalization. Found y_values: {y_values}"
+                )
 
         plt.close()
 
@@ -518,7 +515,7 @@ class TestPlotEventStudy:
 
         # Get original effects from results
         original_effects = {
-            period: effect_data['effect']
+            period: effect_data["effect"]
             for period, effect_data in results.event_study_effects.items()
         }
 
@@ -528,8 +525,7 @@ class TestPlotEventStudy:
 
         # Compute expected normalized effects
         expected_normalized = {
-            period: effect - ref_effect
-            for period, effect in original_effects.items()
+            period: effect - ref_effect for period, effect in original_effects.items()
         }
 
         # Plot WITH explicit reference_period - this SHOULD normalize
@@ -538,21 +534,23 @@ class TestPlotEventStudy:
         # Extract plotted y-values
         y_values = []
         for child in ax.get_children():
-            if hasattr(child, 'get_ydata'):
+            if hasattr(child, "get_ydata"):
                 ydata = child.get_ydata()
                 if len(ydata) == 1:
                     y_values.append(float(ydata[0]))
 
         # The reference period should now be at y=0 (normalized)
-        assert any(abs(y) < 0.01 for y in y_values), \
-            f"Reference period should be normalized to y=0, got y_values={y_values}"
+        assert any(
+            abs(y) < 0.01 for y in y_values
+        ), f"Reference period should be normalized to y=0, got y_values={y_values}"
 
         # Verify normalized values are present
         for period, norm_effect in expected_normalized.items():
             if np.isfinite(norm_effect):
-                assert any(abs(y - norm_effect) < 0.05 for y in y_values), \
-                    f"Normalized effect {norm_effect:.3f} for period {period} " \
+                assert any(abs(y - norm_effect) < 0.05 for y in y_values), (
+                    f"Normalized effect {norm_effect:.3f} for period {period} "
                     f"not found in {y_values}"
+                )
 
         # Verify reference period has no error bars (SE was set to NaN)
         # Find error bar x-coordinates
@@ -562,15 +560,16 @@ class TestPlotEventStudy:
         if ref_x_idx is not None:
             errorbar_x_coords = set()
             for child in ax.get_children():
-                if hasattr(child, 'get_segments'):
+                if hasattr(child, "get_segments"):
                     segments = child.get_segments()
                     for seg in segments:
                         if len(seg) >= 2:
                             errorbar_x_coords.add(round(seg[0][0], 1))
 
             # Reference period should NOT have error bars
-            assert ref_x_idx not in errorbar_x_coords, \
-                f"Reference period at x={ref_x_idx} should have no error bars"
+            assert (
+                ref_x_idx not in errorbar_x_coords
+            ), f"Reference period at x={ref_x_idx} should have no error bars"
 
         plt.close()
 
@@ -590,18 +589,15 @@ class TestPlotEventStudyIntegration:
         did = MultiPeriodDiD()
         results = did.fit(
             data,
-            outcome='outcome',
-            treatment='treated',
-            time='period',
-            post_periods=[2, 3]
+            outcome="outcome",
+            treatment="treated",
+            time="period",
+            post_periods=[2, 3],
+            reference_period=1,
         )
 
         # Plot
-        ax = plot_event_study(
-            results,
-            title="Treatment Effects Over Time",
-            show=False
-        )
+        ax = plot_event_study(results, title="Treatment Effects Over Time", show=False)
 
         assert ax is not None
         plt.close()
@@ -618,19 +614,15 @@ class TestPlotEventStudyIntegration:
         cs = CallawaySantAnna()
         results = cs.fit(
             data,
-            outcome='outcome',
-            unit='unit',
-            time='time',
-            first_treat='first_treat',
-            aggregate='event_study'
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
+            aggregate="event_study",
         )
 
         # Plot
-        ax = plot_event_study(
-            results,
-            title="Staggered DiD Event Study",
-            show=False
-        )
+        ax = plot_event_study(results, title="Staggered DiD Event Study", show=False)
 
         assert ax is not None
         plt.close()

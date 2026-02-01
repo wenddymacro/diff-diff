@@ -60,7 +60,7 @@ cross-platform compilation - no OpenBLAS or Intel MKL installation required.
 
 - **`diff_diff/estimators.py`** - Core estimator classes implementing DiD methods:
   - `DifferenceInDifferences` - Basic 2x2 DiD with formula or column-name interface
-  - `MultiPeriodDiD` - Event-study style DiD with period-specific treatment effects
+  - `MultiPeriodDiD` - Full event-study DiD with treatment × period interactions for ALL periods (pre and post). Supports `unit` parameter for staggered adoption detection. Default reference period is last pre-period (e=-1 convention). Pre-period coefficients enable parallel trends assessment. `interaction_indices` maps periods to VCV column indices for robust sub-VCV extraction in HonestDiD/PreTrendsPower.
   - Re-exports `TwoWayFixedEffects` and `SyntheticDiD` for backward compatibility
 
 - **`diff_diff/twfe.py`** - Two-Way Fixed Effects estimator:

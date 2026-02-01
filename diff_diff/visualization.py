@@ -167,8 +167,7 @@ def plot_event_study(
         import matplotlib.pyplot as plt
     except ImportError:
         raise ImportError(
-            "matplotlib is required for plotting. "
-            "Install it with: pip install matplotlib"
+            "matplotlib is required for plotting. " "Install it with: pip install matplotlib"
         )
 
     from scipy import stats as scipy_stats
@@ -181,14 +180,14 @@ def plot_event_study(
         extracted = _extract_plot_data(
             results, periods, pre_periods, post_periods, reference_period
         )
-        effects, se, periods, pre_periods, post_periods, reference_period, reference_inferred = extracted
+        effects, se, periods, pre_periods, post_periods, reference_period, reference_inferred = (
+            extracted
+        )
         # If reference was inferred from results, it was NOT explicitly provided
         if reference_inferred:
             reference_period_explicit = False
     elif effects is None or se is None:
-        raise ValueError(
-            "Must provide either 'results' or both 'effects' and 'se'"
-        )
+        raise ValueError("Must provide either 'results' or both 'effects' and 'se'")
 
     # Ensure effects and se are dicts
     if not isinstance(effects, dict):
@@ -207,8 +206,7 @@ def plot_event_study(
     # Auto-inferred reference periods (from CallawaySantAnna) just get hollow marker styling,
     # NO normalization. This prevents unintended normalization when the reference period
     # isn't a true identifying constraint (e.g., CallawaySantAnna with base_period="varying").
-    if (reference_period is not None and reference_period in effects and
-            reference_period_explicit):
+    if reference_period is not None and reference_period in effects and reference_period_explicit:
         ref_effect = effects[reference_period]
         if np.isfinite(ref_effect):
             effects = {p: e - ref_effect for p, e in effects.items()}
@@ -233,14 +231,16 @@ def plot_event_study(
             ci_lower = np.nan
             ci_upper = np.nan
 
-        plot_data.append({
-            'period': period,
-            'effect': effect,
-            'se': std_err,
-            'ci_lower': ci_lower,
-            'ci_upper': ci_upper,
-            'is_reference': period == reference_period,
-        })
+        plot_data.append(
+            {
+                "period": period,
+                "effect": effect,
+                "se": std_err,
+                "ci_lower": ci_lower,
+                "ci_upper": ci_upper,
+                "is_reference": period == reference_period,
+            }
+        )
 
     if not plot_data:
         raise ValueError("No valid data to plot")
@@ -254,52 +254,63 @@ def plot_event_study(
         fig = ax.get_figure()
 
     # Convert periods to numeric for plotting
-    period_to_x = {p: i for i, p in enumerate(df['period'])}
-    x_vals = [period_to_x[p] for p in df['period']]
+    period_to_x = {p: i for i, p in enumerate(df["period"])}
+    x_vals = [period_to_x[p] for p in df["period"]]
 
     # Shade pre-treatment region
     if shade_pre and pre_periods is not None:
         pre_x = [period_to_x[p] for p in pre_periods if p in period_to_x]
         if pre_x:
-            ax.axvspan(min(pre_x) - 0.5, max(pre_x) + 0.5,
-                       color=shade_color, alpha=0.5, zorder=0)
+            ax.axvspan(min(pre_x) - 0.5, max(pre_x) + 0.5, color=shade_color, alpha=0.5, zorder=0)
 
     # Draw horizontal zero line
     if show_zero_line:
-        ax.axhline(y=0, color='gray', linestyle='--', linewidth=1, zorder=1)
+        ax.axhline(y=0, color="gray", linestyle="--", linewidth=1, zorder=1)
 
     # Draw vertical reference line
     if show_reference_line and reference_period is not None:
         if reference_period in period_to_x:
             ref_x = period_to_x[reference_period]
-            ax.axvline(x=ref_x, color='gray', linestyle=':', linewidth=1, zorder=1)
+            ax.axvline(x=ref_x, color="gray", linestyle=":", linewidth=1, zorder=1)
 
     # Plot error bars (only for entries with finite CI)
-    has_ci = df['ci_lower'].notna() & df['ci_upper'].notna()
+    has_ci = df["ci_lower"].notna() & df["ci_upper"].notna()
     if has_ci.any():
         df_with_ci = df[has_ci]
-        x_with_ci = [period_to_x[p] for p in df_with_ci['period']]
+        x_with_ci = [period_to_x[p] for p in df_with_ci["period"]]
         yerr = [
-            df_with_ci['effect'] - df_with_ci['ci_lower'],
-            df_with_ci['ci_upper'] - df_with_ci['effect']
+            df_with_ci["effect"] - df_with_ci["ci_lower"],
+            df_with_ci["ci_upper"] - df_with_ci["effect"],
         ]
         ax.errorbar(
-            x_with_ci, df_with_ci['effect'], yerr=yerr,
-            fmt='none', color=color, capsize=capsize, linewidth=linewidth,
-            capthick=linewidth, zorder=2
+            x_with_ci,
+            df_with_ci["effect"],
+            yerr=yerr,
+            fmt="none",
+            color=color,
+            capsize=capsize,
+            linewidth=linewidth,
+            capthick=linewidth,
+            zorder=2,
         )
 
     # Plot point estimates
     for i, row in df.iterrows():
-        x = period_to_x[row['period']]
-        if row['is_reference']:
+        x = period_to_x[row["period"]]
+        if row["is_reference"]:
             # Hollow marker for reference period
-            ax.plot(x, row['effect'], marker=marker, markersize=markersize,
-                    markerfacecolor='white', markeredgecolor=color,
-                    markeredgewidth=2, zorder=3)
+            ax.plot(
+                x,
+                row["effect"],
+                marker=marker,
+                markersize=markersize,
+                markerfacecolor="white",
+                markeredgecolor=color,
+                markeredgewidth=2,
+                zorder=3,
+            )
         else:
-            ax.plot(x, row['effect'], marker=marker, markersize=markersize,
-                    color=color, zorder=3)
+            ax.plot(x, row["effect"], marker=marker, markersize=markersize, color=color, zorder=3)
 
     # Set labels and title
     ax.set_xlabel(xlabel)
@@ -308,10 +319,10 @@ def plot_event_study(
 
     # Set x-axis ticks
     ax.set_xticks(x_vals)
-    ax.set_xticklabels([str(p) for p in df['period']])
+    ax.set_xticklabels([str(p) for p in df["period"]])
 
     # Add grid
-    ax.grid(True, alpha=0.3, axis='y')
+    ax.grid(True, alpha=0.3, axis="y")
 
     # Tight layout
     fig.tight_layout()
@@ -342,24 +353,24 @@ def _extract_plot_data(
     """
     # Handle DataFrame input
     if isinstance(results, pd.DataFrame):
-        if 'period' not in results.columns:
+        if "period" not in results.columns:
             raise ValueError("DataFrame must have 'period' column")
-        if 'effect' not in results.columns:
+        if "effect" not in results.columns:
             raise ValueError("DataFrame must have 'effect' column")
-        if 'se' not in results.columns:
+        if "se" not in results.columns:
             raise ValueError("DataFrame must have 'se' column")
 
-        effects = dict(zip(results['period'], results['effect']))
-        se = dict(zip(results['period'], results['se']))
+        effects = dict(zip(results["period"], results["effect"]))
+        se = dict(zip(results["period"], results["se"]))
 
         if periods is None:
-            periods = list(results['period'])
+            periods = list(results["period"])
 
         # DataFrame input: reference_period was already set by caller, never inferred here
         return effects, se, periods, pre_periods, post_periods, reference_period, False
 
     # Handle MultiPeriodDiDResults
-    if hasattr(results, 'period_effects'):
+    if hasattr(results, "period_effects"):
         effects = {}
         se = {}
 
@@ -367,26 +378,35 @@ def _extract_plot_data(
             effects[period] = pe.effect
             se[period] = pe.se
 
-        if pre_periods is None and hasattr(results, 'pre_periods'):
+        if pre_periods is None and hasattr(results, "pre_periods"):
             pre_periods = results.pre_periods
 
-        if post_periods is None and hasattr(results, 'post_periods'):
+        if post_periods is None and hasattr(results, "post_periods"):
             post_periods = results.post_periods
 
         if periods is None:
-            periods = post_periods
+            periods = sorted(results.period_effects.keys())
 
-        # MultiPeriodDiDResults: reference_period was already set by caller, never inferred here
-        return effects, se, periods, pre_periods, post_periods, reference_period, False
+        # Auto-detect reference period from results if not explicitly provided
+        ref_inferred = False
+        if (
+            reference_period is None
+            and hasattr(results, "reference_period")
+            and results.reference_period is not None
+        ):
+            reference_period = results.reference_period
+            ref_inferred = True
+
+        return effects, se, periods, pre_periods, post_periods, reference_period, ref_inferred
 
     # Handle CallawaySantAnnaResults (event study aggregation)
-    if hasattr(results, 'event_study_effects') and results.event_study_effects is not None:
+    if hasattr(results, "event_study_effects") and results.event_study_effects is not None:
         effects = {}
         se = {}
 
         for rel_period, effect_data in results.event_study_effects.items():
-            effects[rel_period] = effect_data['effect']
-            se[rel_period] = effect_data['se']
+            effects[rel_period] = effect_data["effect"]
+            se[rel_period] = effect_data["se"]
 
         if periods is None:
             periods = sorted(effects.keys())
@@ -400,7 +420,7 @@ def _extract_plot_data(
             # Detect reference period from n_groups=0 marker (normalization constraint)
             # This handles anticipation > 0 where reference is at e = -1 - anticipation
             for period, effect_data in results.event_study_effects.items():
-                if effect_data.get('n_groups', 1) == 0:
+                if effect_data.get("n_groups", 1) == 0:
                     reference_period = period
                     break
             # Fallback to -1 if no marker found (backward compatibility)
@@ -467,13 +487,12 @@ def plot_group_effects(
         import matplotlib.pyplot as plt
     except ImportError:
         raise ImportError(
-            "matplotlib is required for plotting. "
-            "Install it with: pip install matplotlib"
+            "matplotlib is required for plotting. " "Install it with: pip install matplotlib"
         )
 
     from scipy import stats as scipy_stats
 
-    if not hasattr(results, 'group_time_effects'):
+    if not hasattr(results, "group_time_effects"):
         raise TypeError("results must be a CallawaySantAnnaResults object")
 
     # Get groups to plot
@@ -494,8 +513,7 @@ def plot_group_effects(
     for i, group in enumerate(groups):
         # Get effects for this group
         group_effects = [
-            (t, data) for (g, t), data in results.group_time_effects.items()
-            if g == group
+            (t, data) for (g, t), data in results.group_time_effects.items() if g == group
         ]
         group_effects.sort(key=lambda x: x[0])
 
@@ -503,26 +521,31 @@ def plot_group_effects(
             continue
 
         times = [t for t, _ in group_effects]
-        effects = [data['effect'] for _, data in group_effects]
-        ses = [data['se'] for _, data in group_effects]
+        effects = [data["effect"] for _, data in group_effects]
+        ses = [data["se"] for _, data in group_effects]
 
         yerr = [
             [e - (e - critical_value * s) for e, s in zip(effects, ses)],
-            [(e + critical_value * s) - e for e, s in zip(effects, ses)]
+            [(e + critical_value * s) - e for e, s in zip(effects, ses)],
         ]
 
         ax.errorbar(
-            times, effects, yerr=yerr,
-            label=f'Cohort {group}', color=colors[i],
-            marker='o', capsize=3, linewidth=1.5
+            times,
+            effects,
+            yerr=yerr,
+            label=f"Cohort {group}",
+            color=colors[i],
+            marker="o",
+            capsize=3,
+            linewidth=1.5,
         )
 
-    ax.axhline(y=0, color='gray', linestyle='--', linewidth=1)
+    ax.axhline(y=0, color="gray", linestyle="--", linewidth=1)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_title(title)
-    ax.legend(loc='best')
-    ax.grid(True, alpha=0.3, axis='y')
+    ax.legend(loc="best")
+    ax.grid(True, alpha=0.3, axis="y")
 
     fig.tight_layout()
 
@@ -615,8 +638,7 @@ def plot_sensitivity(
         import matplotlib.pyplot as plt
     except ImportError:
         raise ImportError(
-            "matplotlib is required for plotting. "
-            "Install it with: pip install matplotlib"
+            "matplotlib is required for plotting. " "Install it with: pip install matplotlib"
         )
 
     # Create figure if needed
@@ -633,52 +655,45 @@ def plot_sensitivity(
     ax.axhline(
         y=sensitivity_results.original_estimate,
         color=original_color,
-        linestyle='-',
+        linestyle="-",
         linewidth=1.5,
-        label='Original estimate',
-        alpha=0.7
+        label="Original estimate",
+        alpha=0.7,
     )
 
     # Plot zero line
-    ax.axhline(y=0, color='gray', linestyle='--', linewidth=1, alpha=0.5)
+    ax.axhline(y=0, color="gray", linestyle="--", linewidth=1, alpha=0.5)
 
     # Plot identified set bounds
     if show_bounds:
         ax.fill_between(
-            M, bounds_arr[:, 0], bounds_arr[:, 1],
+            M,
+            bounds_arr[:, 0],
+            bounds_arr[:, 1],
             alpha=bounds_alpha,
             color=bounds_color,
-            label='Identified set'
+            label="Identified set",
         )
 
     # Plot confidence intervals
     if show_ci:
-        ax.plot(
-            M, ci_arr[:, 0],
-            color=ci_color,
-            linewidth=ci_linewidth,
-            label='Robust CI'
-        )
-        ax.plot(
-            M, ci_arr[:, 1],
-            color=ci_color,
-            linewidth=ci_linewidth
-        )
+        ax.plot(M, ci_arr[:, 0], color=ci_color, linewidth=ci_linewidth, label="Robust CI")
+        ax.plot(M, ci_arr[:, 1], color=ci_color, linewidth=ci_linewidth)
 
     # Plot breakdown line
     if breakdown_line and sensitivity_results.breakdown_M is not None:
         ax.axvline(
             x=sensitivity_results.breakdown_M,
             color=breakdown_color,
-            linestyle=':',
+            linestyle=":",
             linewidth=2,
-            label=f'Breakdown (M={sensitivity_results.breakdown_M:.2f})'
+            label=f"Breakdown (M={sensitivity_results.breakdown_M:.2f})",
         )
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_title(title)
-    ax.legend(loc='best')
+    ax.legend(loc="best")
     ax.grid(True, alpha=0.3)
 
     fig.tight_layout()
@@ -758,8 +773,7 @@ def plot_honest_event_study(
         import matplotlib.pyplot as plt
     except ImportError:
         raise ImportError(
-            "matplotlib is required for plotting. "
-            "Install it with: pip install matplotlib"
+            "matplotlib is required for plotting. " "Install it with: pip install matplotlib"
         )
 
     from scipy import stats as scipy_stats
@@ -767,31 +781,21 @@ def plot_honest_event_study(
     # Get original results for standard CIs
     original_results = honest_results.original_results
     if original_results is None:
-        raise ValueError(
-            "HonestDiDResults must have original_results to plot event study"
-        )
+        raise ValueError("HonestDiDResults must have original_results to plot event study")
 
     # Extract data from original results
-    if hasattr(original_results, 'period_effects'):
+    if hasattr(original_results, "period_effects"):
         # MultiPeriodDiDResults
-        effects_dict = {
-            p: pe.effect for p, pe in original_results.period_effects.items()
-        }
-        se_dict = {
-            p: pe.se for p, pe in original_results.period_effects.items()
-        }
+        effects_dict = {p: pe.effect for p, pe in original_results.period_effects.items()}
+        se_dict = {p: pe.se for p, pe in original_results.period_effects.items()}
         if periods is None:
             periods = list(original_results.period_effects.keys())
-    elif hasattr(original_results, 'event_study_effects'):
+    elif hasattr(original_results, "event_study_effects"):
         # CallawaySantAnnaResults
         effects_dict = {
-            t: data['effect']
-            for t, data in original_results.event_study_effects.items()
+            t: data["effect"] for t, data in original_results.event_study_effects.items()
         }
-        se_dict = {
-            t: data['se']
-            for t, data in original_results.event_study_effects.items()
-        }
+        se_dict = {t: data["se"] for t, data in original_results.event_study_effects.items()}
         if periods is None:
             periods = sorted(original_results.event_study_effects.keys())
     else:
@@ -815,62 +819,73 @@ def plot_honest_event_study(
 
     # Get honest bounds if available for each period
     if honest_results.event_study_bounds:
-        honest_ci_lower = [
-            honest_results.event_study_bounds[p]['ci_lb']
-            for p in periods
-        ]
-        honest_ci_upper = [
-            honest_results.event_study_bounds[p]['ci_ub']
-            for p in periods
-        ]
+        honest_ci_lower = [honest_results.event_study_bounds[p]["ci_lb"] for p in periods]
+        honest_ci_upper = [honest_results.event_study_bounds[p]["ci_ub"] for p in periods]
     else:
         # Use scalar bounds applied to all periods
         honest_ci_lower = [honest_results.ci_lb] * len(periods)
         honest_ci_upper = [honest_results.ci_ub] * len(periods)
 
     # Zero line
-    ax.axhline(y=0, color='gray', linestyle='--', linewidth=1, alpha=0.5)
+    ax.axhline(y=0, color="gray", linestyle="--", linewidth=1, alpha=0.5)
 
     # Plot original CIs (thinner, background)
     yerr_orig = [
         [e - lower for e, lower in zip(effects, original_ci_lower)],
-        [u - e for e, u in zip(effects, original_ci_upper)]
+        [u - e for e, u in zip(effects, original_ci_upper)],
     ]
     ax.errorbar(
-        x_vals, effects, yerr=yerr_orig,
-        fmt='none', color=original_color, capsize=capsize - 1,
-        linewidth=1, alpha=0.6, label='Standard CI'
+        x_vals,
+        effects,
+        yerr=yerr_orig,
+        fmt="none",
+        color=original_color,
+        capsize=capsize - 1,
+        linewidth=1,
+        alpha=0.6,
+        label="Standard CI",
     )
 
     # Plot honest CIs (thicker, foreground)
     yerr_honest = [
         [e - lower for e, lower in zip(effects, honest_ci_lower)],
-        [u - e for e, u in zip(effects, honest_ci_upper)]
+        [u - e for e, u in zip(effects, honest_ci_upper)],
     ]
     ax.errorbar(
-        x_vals, effects, yerr=yerr_honest,
-        fmt='none', color=honest_color, capsize=capsize,
-        linewidth=2, label=f'Honest CI (M={honest_results.M:.2f})'
+        x_vals,
+        effects,
+        yerr=yerr_honest,
+        fmt="none",
+        color=honest_color,
+        capsize=capsize,
+        linewidth=2,
+        label=f"Honest CI (M={honest_results.M:.2f})",
     )
 
     # Plot point estimates
     for i, (x, effect, period) in enumerate(zip(x_vals, effects, periods)):
         is_ref = period == reference_period
         if is_ref:
-            ax.plot(x, effect, marker=marker, markersize=markersize,
-                    markerfacecolor='white', markeredgecolor=honest_color,
-                    markeredgewidth=2, zorder=3)
+            ax.plot(
+                x,
+                effect,
+                marker=marker,
+                markersize=markersize,
+                markerfacecolor="white",
+                markeredgecolor=honest_color,
+                markeredgewidth=2,
+                zorder=3,
+            )
         else:
-            ax.plot(x, effect, marker=marker, markersize=markersize,
-                    color=honest_color, zorder=3)
+            ax.plot(x, effect, marker=marker, markersize=markersize, color=honest_color, zorder=3)
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.set_xticks(x_vals)
     ax.set_xticklabels([str(p) for p in periods])
-    ax.legend(loc='best')
-    ax.grid(True, alpha=0.3, axis='y')
+    ax.legend(loc="best")
+    ax.grid(True, alpha=0.3, axis="y")
 
     fig.tight_layout()
 
@@ -993,16 +1008,15 @@ def plot_bacon(
         import matplotlib.pyplot as plt
     except ImportError:
         raise ImportError(
-            "matplotlib is required for plotting. "
-            "Install it with: pip install matplotlib"
+            "matplotlib is required for plotting. " "Install it with: pip install matplotlib"
         )
 
     # Default colors
     if colors is None:
         colors = {
-            "treated_vs_never": "#22c55e",    # Green - clean comparison
-            "earlier_vs_later": "#3b82f6",    # Blue - valid comparison
-            "later_vs_earlier": "#ef4444",    # Red - forbidden comparison
+            "treated_vs_never": "#22c55e",  # Green - clean comparison
+            "earlier_vs_later": "#3b82f6",  # Blue - valid comparison
+            "later_vs_earlier": "#ef4444",  # Red - forbidden comparison
         }
 
     # Default titles
@@ -1020,8 +1034,17 @@ def plot_bacon(
 
     if plot_type == "scatter":
         _plot_bacon_scatter(
-            ax, results, colors, marker, markersize, alpha,
-            show_weighted_avg, show_twfe_line, xlabel, ylabel, title
+            ax,
+            results,
+            colors,
+            marker,
+            markersize,
+            alpha,
+            show_weighted_avg,
+            show_twfe_line,
+            xlabel,
+            ylabel,
+            title,
         )
     elif plot_type == "bar":
         _plot_bacon_bar(ax, results, colors, alpha, ylabel, title)
@@ -1073,13 +1096,14 @@ def _plot_bacon_scatter(
         estimates = [p[0] for p in points]
         weights = [p[1] for p in points]
         ax.scatter(
-            estimates, weights,
+            estimates,
+            weights,
             c=colors[ctype],
             label=labels[ctype],
             marker=marker,
             s=markersize,
             alpha=alpha,
-            edgecolors='white',
+            edgecolors="white",
             linewidths=0.5,
         )
 
@@ -1091,7 +1115,7 @@ def _plot_bacon_scatter(
                 ax.axvline(
                     x=avg_effect,
                     color=colors[ctype],
-                    linestyle='--',
+                    linestyle="--",
                     alpha=0.5,
                     linewidth=1.5,
                 )
@@ -1100,20 +1124,20 @@ def _plot_bacon_scatter(
     if show_twfe_line:
         ax.axvline(
             x=results.twfe_estimate,
-            color='black',
-            linestyle='-',
+            color="black",
+            linestyle="-",
             linewidth=2,
-            label=f'TWFE = {results.twfe_estimate:.4f}',
+            label=f"TWFE = {results.twfe_estimate:.4f}",
         )
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_title(title)
-    ax.legend(loc='best')
+    ax.legend(loc="best")
     ax.grid(True, alpha=0.3)
 
     # Add zero line
-    ax.axvline(x=0, color='gray', linestyle=':', alpha=0.5)
+    ax.axvline(x=0, color="gray", linestyle=":", alpha=0.5)
 
 
 def _plot_bacon_bar(
@@ -1147,7 +1171,7 @@ def _plot_bacon_bar(
         bar_weights,
         color=bar_colors,
         alpha=alpha,
-        edgecolor='white',
+        edgecolor="white",
         linewidth=1,
     )
 
@@ -1156,14 +1180,14 @@ def _plot_bacon_bar(
         if weight > 0.01:  # Only label if > 1%
             height = bar.get_height()
             ax.annotate(
-                f'{weight:.1%}',
+                f"{weight:.1%}",
                 xy=(bar.get_x() + bar.get_width() / 2, height),
                 xytext=(0, 3),
                 textcoords="offset points",
-                ha='center',
-                va='bottom',
+                ha="center",
+                va="bottom",
                 fontsize=10,
-                fontweight='bold',
+                fontweight="bold",
             )
 
     # Add weighted average effect annotations
@@ -1172,13 +1196,13 @@ def _plot_bacon_bar(
         effect = effects[ctype]
         if effect is not None and weights[ctype] > 0.01:
             ax.annotate(
-                f'β = {effect:.3f}',
+                f"β = {effect:.3f}",
                 xy=(bar.get_x() + bar.get_width() / 2, bar.get_height() / 2),
-                ha='center',
-                va='center',
+                ha="center",
+                va="center",
                 fontsize=9,
-                color='white',
-                fontweight='bold',
+                color="white",
+                fontweight="bold",
             )
 
     ax.set_ylabel(ylabel)
@@ -1186,17 +1210,18 @@ def _plot_bacon_bar(
     ax.set_ylim(0, 1.1)
 
     # Add horizontal line at total weight = 1
-    ax.axhline(y=1.0, color='gray', linestyle='--', alpha=0.5)
+    ax.axhline(y=1.0, color="gray", linestyle="--", alpha=0.5)
 
     # Add TWFE estimate as text
     ax.text(
-        0.98, 0.98,
-        f'TWFE = {results.twfe_estimate:.4f}',
+        0.98,
+        0.98,
+        f"TWFE = {results.twfe_estimate:.4f}",
         transform=ax.transAxes,
-        ha='right',
-        va='top',
+        ha="right",
+        va="top",
         fontsize=10,
-        bbox=dict(boxstyle='round', facecolor='white', alpha=0.8),
+        bbox=dict(boxstyle="round", facecolor="white", alpha=0.8),
     )
 
 
@@ -1310,8 +1335,7 @@ def plot_power_curve(
         import matplotlib.pyplot as plt
     except ImportError:
         raise ImportError(
-            "matplotlib is required for plotting. "
-            "Install it with: pip install matplotlib"
+            "matplotlib is required for plotting. " "Install it with: pip install matplotlib"
         )
 
     # Extract data from results if provided
@@ -1325,9 +1349,7 @@ def plot_power_curve(
                 effect_sizes = results["sample_size"].tolist()
                 plot_type = "sample"
             else:
-                raise ValueError(
-                    "DataFrame must have 'effect_size' or 'sample_size' column"
-                )
+                raise ValueError("DataFrame must have 'effect_size' or 'sample_size' column")
             powers = results["power"].tolist()
         elif hasattr(results, "effect_sizes") and hasattr(results, "powers"):
             # SimulationPowerResults
@@ -1343,13 +1365,9 @@ def plot_power_curve(
                 "Use PowerAnalysis.power_curve() to generate curve data."
             )
         else:
-            raise TypeError(
-                f"Cannot extract power curve data from {type(results).__name__}"
-            )
+            raise TypeError(f"Cannot extract power curve data from {type(results).__name__}")
     elif effect_sizes is None or powers is None:
-        raise ValueError(
-            "Must provide either 'results' or both 'effect_sizes' and 'powers'"
-        )
+        raise ValueError("Must provide either 'results' or both 'effect_sizes' and 'powers'")
 
     # Default titles and labels
     if title is None:
@@ -1371,12 +1389,7 @@ def plot_power_curve(
         fig = ax.get_figure()
 
     # Plot power curve
-    ax.plot(
-        effect_sizes, powers,
-        color=color,
-        linewidth=linewidth,
-        label="Power"
-    )
+    ax.plot(effect_sizes, powers, color=color, linewidth=linewidth, label="Power")
 
     # Add target power line
     if show_target_line:
@@ -1386,7 +1399,7 @@ def plot_power_curve(
             linestyle="--",
             linewidth=1.5,
             alpha=0.7,
-            label=f"Target power ({target_power:.0%})"
+            label=f"Target power ({target_power:.0%})",
         )
 
     # Add MDE line
@@ -1397,7 +1410,7 @@ def plot_power_curve(
             linestyle=":",
             linewidth=1.5,
             alpha=0.7,
-            label=f"MDE = {mde:.3f}"
+            label=f"MDE = {mde:.3f}",
         )
 
         # Mark intersection point
@@ -1415,12 +1428,7 @@ def plot_power_curve(
                 power_at_mde = None
 
         if power_at_mde is not None:
-            ax.scatter(
-                [mde], [power_at_mde],
-                color=mde_color,
-                s=50,
-                zorder=5
-            )
+            ax.scatter([mde], [power_at_mde], color=mde_color, s=50, zorder=5)
 
     # Configure axes
     ax.set_xlabel(xlabel)
@@ -1431,7 +1439,7 @@ def plot_power_curve(
     ax.set_ylim(0, 1.05)
 
     # Format y-axis as percentage
-    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.0%}'))
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0%}"))
 
     if show_grid:
         ax.grid(True, alpha=0.3)
@@ -1566,8 +1574,7 @@ def plot_pretrends_power(
         import matplotlib.pyplot as plt
     except ImportError:
         raise ImportError(
-            "matplotlib is required for plotting. "
-            "Install it with: pip install matplotlib"
+            "matplotlib is required for plotting. " "Install it with: pip install matplotlib"
         )
 
     # Extract data from results if provided
@@ -1598,13 +1605,9 @@ def plot_pretrends_power(
             # Just show MDV marker
             powers = None
         else:
-            raise TypeError(
-                f"Cannot extract power curve data from {type(results).__name__}"
-            )
+            raise TypeError(f"Cannot extract power curve data from {type(results).__name__}")
     elif M_values is None or powers is None:
-        raise ValueError(
-            "Must provide either 'results' or both 'M_values' and 'powers'"
-        )
+        raise ValueError("Must provide either 'results' or both 'M_values' and 'powers'")
 
     # Create figure if needed
     if ax is None:
@@ -1614,12 +1617,7 @@ def plot_pretrends_power(
 
     # Plot power curve if we have powers
     if powers is not None:
-        ax.plot(
-            M_values, powers,
-            color=color,
-            linewidth=linewidth,
-            label="Power"
-        )
+        ax.plot(M_values, powers, color=color, linewidth=linewidth, label="Power")
 
     # Add target power line
     if show_target_line:
@@ -1629,7 +1627,7 @@ def plot_pretrends_power(
             linestyle="--",
             linewidth=1.5,
             alpha=0.7,
-            label=f"Target power ({target_power:.0%})"
+            label=f"Target power ({target_power:.0%})",
         )
 
     # Add MDV line
@@ -1640,7 +1638,7 @@ def plot_pretrends_power(
             linestyle=":",
             linewidth=1.5,
             alpha=0.7,
-            label=f"MDV = {mdv:.3f}"
+            label=f"MDV = {mdv:.3f}",
         )
 
         # Mark intersection point if we have powers
@@ -1650,12 +1648,7 @@ def plot_pretrends_power(
             power_arr = np.array(powers)
             if M_arr.min() <= mdv <= M_arr.max():
                 power_at_mdv = np.interp(mdv, M_arr, power_arr)
-                ax.scatter(
-                    [mdv], [power_at_mdv],
-                    color=mdv_color,
-                    s=50,
-                    zorder=5
-                )
+                ax.scatter([mdv], [power_at_mdv], color=mdv_color, s=50, zorder=5)
 
     # Configure axes
     ax.set_xlabel(xlabel)
@@ -1666,7 +1659,7 @@ def plot_pretrends_power(
     ax.set_ylim(0, 1.05)
 
     # Format y-axis as percentage
-    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.0%}'))
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0%}"))
 
     if show_grid:
         ax.grid(True, alpha=0.3)

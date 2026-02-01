@@ -56,13 +56,15 @@ def simple_panel_data():
 
             y += np.random.normal(0, 0.5)
 
-            data.append({
-                'unit': unit,
-                'period': period,
-                'treated': int(is_treated),
-                'post': int(post),
-                'outcome': y
-            })
+            data.append(
+                {
+                    "unit": unit,
+                    "period": period,
+                    "treated": int(is_treated),
+                    "post": int(post),
+                    "outcome": y,
+                }
+            )
 
     return pd.DataFrame(data)
 
@@ -73,42 +75,61 @@ def multiperiod_results(simple_panel_data):
     mp_did = MultiPeriodDiD()
     results = mp_did.fit(
         simple_panel_data,
-        outcome='outcome',
-        treatment='treated',
-        time='period',
-        post_periods=[4, 5, 6, 7]
+        outcome="outcome",
+        treatment="treated",
+        time="period",
+        post_periods=[4, 5, 6, 7],
+        reference_period=3,
     )
     return results
 
 
 @pytest.fixture
 def mock_multiperiod_results():
-    """Create mock MultiPeriodDiDResults for unit testing."""
+    """Create mock MultiPeriodDiDResults for unit testing.
+
+    Simulates a full event-study with pre-period and post-period effects.
+    Reference period is 3 (last pre-period), so period_effects has
+    periods 0, 1, 2 (pre) and 4, 5, 6, 7 (post).
+    """
     period_effects = {
+        # Pre-period effects (should be ~0 under parallel trends)
+        0: PeriodEffect(
+            period=0, effect=0.05, se=0.4, t_stat=0.125, p_value=0.90, conf_int=(-0.73, 0.83)
+        ),
+        1: PeriodEffect(
+            period=1, effect=-0.02, se=0.35, t_stat=-0.057, p_value=0.95, conf_int=(-0.71, 0.67)
+        ),
+        2: PeriodEffect(
+            period=2, effect=0.08, se=0.3, t_stat=0.267, p_value=0.79, conf_int=(-0.51, 0.67)
+        ),
+        # Post-period effects
         4: PeriodEffect(
-            period=4, effect=5.0, se=0.5,
-            t_stat=10.0, p_value=0.0001,
-            conf_int=(4.02, 5.98)
+            period=4, effect=5.0, se=0.5, t_stat=10.0, p_value=0.0001, conf_int=(4.02, 5.98)
         ),
         5: PeriodEffect(
-            period=5, effect=5.2, se=0.5,
-            t_stat=10.4, p_value=0.0001,
-            conf_int=(4.22, 6.18)
+            period=5, effect=5.2, se=0.5, t_stat=10.4, p_value=0.0001, conf_int=(4.22, 6.18)
         ),
         6: PeriodEffect(
-            period=6, effect=4.8, se=0.5,
-            t_stat=9.6, p_value=0.0001,
-            conf_int=(3.82, 5.78)
+            period=6, effect=4.8, se=0.5, t_stat=9.6, p_value=0.0001, conf_int=(3.82, 5.78)
         ),
         7: PeriodEffect(
-            period=7, effect=5.0, se=0.5,
-            t_stat=10.0, p_value=0.0001,
-            conf_int=(4.02, 5.98)
+            period=7, effect=5.0, se=0.5, t_stat=10.0, p_value=0.0001, conf_int=(4.02, 5.98)
         ),
     }
 
-    # Create vcov matrix (diagonal for simplicity)
-    vcov = np.diag([0.25] * 4)
+    # SE^2 for all 7 interaction terms (periods 0,1,2,4,5,6,7)
+    vcov_diag = [0.4**2, 0.35**2, 0.3**2, 0.5**2, 0.5**2, 0.5**2, 0.5**2]
+
+    # interaction_indices maps period -> column index in the full regression VCV
+    # (in a real fit, these would be the actual column positions)
+    interaction_indices = {0: 10, 1: 11, 2: 12, 4: 13, 5: 14, 6: 15, 7: 16}
+
+    # Build a larger "full" VCV that the sub-extraction will index into
+    full_vcov = np.zeros((20, 20))
+    for i, period in enumerate(sorted(interaction_indices.keys())):
+        col = interaction_indices[period]
+        full_vcov[col, col] = vcov_diag[i]
 
     return MultiPeriodDiDResults(
         period_effects=period_effects,
@@ -122,7 +143,9 @@ def mock_multiperiod_results():
         n_control=400,
         pre_periods=[0, 1, 2, 3],
         post_periods=[4, 5, 6, 7],
-        vcov=vcov,
+        vcov=full_vcov,
+        reference_period=3,
+        interaction_indices=interaction_indices,
     )
 
 
@@ -198,11 +221,7 @@ class TestConstraintConstruction:
 
     def test_construct_constraints_sd(self):
         """Test smoothness constraints."""
-        A_ineq, b_ineq = _construct_constraints_sd(
-            num_pre_periods=3,
-            num_post_periods=4,
-            M=0.5
-        )
+        A_ineq, b_ineq = _construct_constraints_sd(num_pre_periods=3, num_post_periods=4, M=0.5)
 
         # Should have 2 * (7 - 2) = 10 constraints
         assert A_ineq.shape[0] == 10
@@ -212,10 +231,7 @@ class TestConstraintConstruction:
     def test_construct_constraints_rm(self):
         """Test relative magnitudes constraints."""
         A_ineq, b_ineq = _construct_constraints_rm(
-            num_pre_periods=3,
-            num_post_periods=4,
-            Mbar=1.5,
-            max_pre_violation=0.2
+            num_pre_periods=3, num_post_periods=4, Mbar=1.5, max_pre_violation=0.2
         )
 
         # Should have 2 * 4 = 8 constraints (upper and lower for each post period)
@@ -242,6 +258,7 @@ class TestCIMethods:
 
         # FLCI extends each side by z * se
         from scipy import stats
+
         z = stats.norm.ppf(1 - alpha / 2)
         expected_ci_lb = lb - z * se
         expected_ci_ub = ub + z * se
@@ -259,6 +276,7 @@ class TestCIMethods:
 
         # Should be standard CI
         from scipy import stats
+
         z = stats.norm.ppf(1 - alpha / 2)
         assert ci_lb == pytest.approx(point - z * se)
         assert ci_ub == pytest.approx(point + z * se)
@@ -274,14 +292,21 @@ class TestParameterExtraction:
 
     def test_extract_from_multiperiod(self, mock_multiperiod_results):
         """Test extraction from MultiPeriodDiDResults."""
-        (beta_hat, sigma, num_pre, num_post,
-         pre_periods, post_periods) = _extract_event_study_params(mock_multiperiod_results)
+        (beta_hat, sigma, num_pre, num_post, pre_periods, post_periods) = (
+            _extract_event_study_params(mock_multiperiod_results)
+        )
 
-        assert len(beta_hat) == 4
-        assert sigma.shape == (4, 4)
-        assert num_pre == 4
+        # 7 estimated effects: 3 pre (0,1,2) + 4 post (4,5,6,7), ref=3 excluded
+        assert len(beta_hat) == 7
+        assert sigma.shape == (7, 7)
+        assert num_pre == 3
         assert num_post == 4
         assert post_periods == [4, 5, 6, 7]
+
+        # Verify sub-VCV diagonal matches squared SEs
+        for i, period in enumerate(sorted(mock_multiperiod_results.period_effects.keys())):
+            pe = mock_multiperiod_results.period_effects[period]
+            assert sigma[i, i] == pytest.approx(pe.se**2, abs=1e-10)
 
     def test_extract_unsupported_type_raises(self):
         """Test that unsupported types raise TypeError."""
@@ -389,7 +414,9 @@ class TestHonestDiD:
         results_large = honest.fit(mock_multiperiod_results, M=2.0)
 
         # Larger M should give wider bounds
-        assert results_large.ci_ub - results_large.ci_lb >= results_small.ci_ub - results_small.ci_lb
+        assert (
+            results_large.ci_ub - results_large.ci_lb >= results_small.ci_ub - results_small.ci_lb
+        )
 
 
 class TestSensitivityAnalysis:
@@ -459,13 +486,13 @@ class TestHonestDiDResults:
         honest = HonestDiD(method="relative_magnitude", M=1.0)
         results = honest.fit(mock_multiperiod_results)
 
-        assert hasattr(results, 'lb')
-        assert hasattr(results, 'ub')
-        assert hasattr(results, 'ci_lb')
-        assert hasattr(results, 'ci_ub')
-        assert hasattr(results, 'is_significant')
-        assert hasattr(results, 'identified_set_width')
-        assert hasattr(results, 'ci_width')
+        assert hasattr(results, "lb")
+        assert hasattr(results, "ub")
+        assert hasattr(results, "ci_lb")
+        assert hasattr(results, "ci_ub")
+        assert hasattr(results, "is_significant")
+        assert hasattr(results, "identified_set_width")
+        assert hasattr(results, "ci_width")
 
     def test_results_is_significant(self, mock_multiperiod_results):
         """Test is_significant property."""
@@ -501,10 +528,10 @@ class TestHonestDiDResults:
 
         d = results.to_dict()
         assert isinstance(d, dict)
-        assert 'lb' in d
-        assert 'ub' in d
-        assert 'M' in d
-        assert 'method' in d
+        assert "lb" in d
+        assert "ub" in d
+        assert "M" in d
+        assert "method" in d
 
     def test_results_to_dataframe(self, mock_multiperiod_results):
         """Test to_dataframe method."""
@@ -526,9 +553,9 @@ class TestSensitivityResults:
 
         df = sensitivity.to_dataframe()
         assert isinstance(df, pd.DataFrame)
-        assert 'M' in df.columns
-        assert 'lb' in df.columns
-        assert 'ci_lb' in df.columns
+        assert "M" in df.columns
+        assert "lb" in df.columns
+        assert "ci_lb" in df.columns
 
     def test_sensitivity_results_summary(self, mock_multiperiod_results):
         """Test summary method."""
@@ -549,11 +576,7 @@ class TestConvenienceFunctions:
 
     def test_compute_honest_did(self, mock_multiperiod_results):
         """Test compute_honest_did function."""
-        results = compute_honest_did(
-            mock_multiperiod_results,
-            method='relative_magnitude',
-            M=1.0
-        )
+        results = compute_honest_did(mock_multiperiod_results, method="relative_magnitude", M=1.0)
 
         assert isinstance(results, HonestDiDResults)
         assert results.M == 1.0
@@ -573,14 +596,15 @@ class TestIntegration:
         mp_did = MultiPeriodDiD()
         event_results = mp_did.fit(
             simple_panel_data,
-            outcome='outcome',
-            treatment='treated',
-            time='period',
-            post_periods=[4, 5, 6, 7]
+            outcome="outcome",
+            treatment="treated",
+            time="period",
+            post_periods=[4, 5, 6, 7],
+            reference_period=3,
         )
 
         # Run Honest DiD
-        honest = HonestDiD(method='relative_magnitude', M=1.0)
+        honest = HonestDiD(method="relative_magnitude", M=1.0)
         bounds = honest.fit(event_results)
 
         # Check results are reasonable
@@ -593,13 +617,14 @@ class TestIntegration:
         mp_did = MultiPeriodDiD()
         event_results = mp_did.fit(
             simple_panel_data,
-            outcome='outcome',
-            treatment='treated',
-            time='period',
-            post_periods=[4, 5, 6, 7]
+            outcome="outcome",
+            treatment="treated",
+            time="period",
+            post_periods=[4, 5, 6, 7],
+            reference_period=3,
         )
 
-        honest = HonestDiD(method='relative_magnitude')
+        honest = HonestDiD(method="relative_magnitude")
         sensitivity = honest.sensitivity_analysis(event_results, M_grid=[0, 0.5, 1.0, 2.0])
 
         # Bounds should widen as M increases
@@ -611,17 +636,53 @@ class TestIntegration:
         mp_did = MultiPeriodDiD()
         event_results = mp_did.fit(
             simple_panel_data,
-            outcome='outcome',
-            treatment='treated',
-            time='period',
-            post_periods=[4, 5, 6, 7]
+            outcome="outcome",
+            treatment="treated",
+            time="period",
+            post_periods=[4, 5, 6, 7],
+            reference_period=3,
         )
 
-        honest = HonestDiD(method='smoothness', M=0.5)
+        honest = HonestDiD(method="smoothness", M=0.5)
         bounds = honest.fit(event_results)
 
         assert isinstance(bounds, HonestDiDResults)
-        assert bounds.method == 'smoothness'
+        assert bounds.method == "smoothness"
+
+    def test_multiperiod_sub_vcov_extraction(self, simple_panel_data):
+        """Test that interaction_indices enables correct sub-VCV extraction.
+
+        Fit MultiPeriodDiD, pass to _extract_event_study_params, and verify:
+        - sigma shape matches len(period_effects) x len(period_effects)
+        - Diagonal of sigma matches squared SEs from period_effects
+        - beta_hat length equals num_pre + num_post
+        """
+        mp_did = MultiPeriodDiD()
+        results = mp_did.fit(
+            simple_panel_data,
+            outcome="outcome",
+            treatment="treated",
+            time="period",
+            post_periods=[4, 5, 6, 7],
+            reference_period=3,
+        )
+
+        (beta_hat, sigma, num_pre, num_post, pre_periods, post_periods) = (
+            _extract_event_study_params(results)
+        )
+
+        n_effects = len(results.period_effects)
+        assert len(beta_hat) == n_effects
+        assert sigma.shape == (n_effects, n_effects)
+        assert num_pre + num_post == n_effects
+
+        # Verify sub-VCV diagonal matches squared SEs from period_effects
+        sorted_periods = sorted(results.period_effects.keys())
+        for i, period in enumerate(sorted_periods):
+            pe = results.period_effects[period]
+            assert sigma[i, i] == pytest.approx(
+                pe.se**2, rel=1e-6
+            ), f"sigma[{i},{i}] = {sigma[i, i]} != se^2 = {pe.se**2} for period {period}"
 
 
 # =============================================================================
@@ -636,9 +697,7 @@ class TestEdgeCases:
         """Test with single post-period."""
         period_effects = {
             4: PeriodEffect(
-                period=4, effect=5.0, se=0.5,
-                t_stat=10.0, p_value=0.0001,
-                conf_int=(4.02, 5.98)
+                period=4, effect=5.0, se=0.5, t_stat=10.0, p_value=0.0001, conf_int=(4.02, 5.98)
             ),
         }
 
@@ -657,14 +716,14 @@ class TestEdgeCases:
             vcov=np.array([[0.25]]),
         )
 
-        honest = HonestDiD(method='relative_magnitude', M=1.0)
+        honest = HonestDiD(method="relative_magnitude", M=1.0)
         bounds = honest.fit(results)
 
         assert isinstance(bounds, HonestDiDResults)
 
     def test_m_zero_recovers_standard(self, mock_multiperiod_results):
         """Test that M=0 gives tighter bounds."""
-        honest = HonestDiD(method='relative_magnitude')
+        honest = HonestDiD(method="relative_magnitude")
 
         results_0 = honest.fit(mock_multiperiod_results, M=0)
         results_1 = honest.fit(mock_multiperiod_results, M=1)
@@ -674,7 +733,7 @@ class TestEdgeCases:
 
     def test_very_large_M(self, mock_multiperiod_results):
         """Test with very large M value."""
-        honest = HonestDiD(method='relative_magnitude', M=100)
+        honest = HonestDiD(method="relative_magnitude", M=100)
         results = honest.fit(mock_multiperiod_results)
 
         # Should still return valid results
@@ -694,19 +753,19 @@ class TestEdgeCases:
         cs = CallawaySantAnna(base_period="universal")
         results = cs.fit(
             data,
-            outcome='outcome',
-            unit='unit',
-            time='period',
-            first_treat='first_treat',
-            aggregate='event_study'
+            outcome="outcome",
+            unit="unit",
+            time="period",
+            first_treat="first_treat",
+            aggregate="event_study",
         )
 
         # Verify reference period exists with NaN SE
         assert -1 in results.event_study_effects
-        assert np.isnan(results.event_study_effects[-1]['se'])
+        assert np.isnan(results.event_study_effects[-1]["se"])
 
         # HonestDiD should work without errors (reference period filtered out)
-        honest = HonestDiD(method='relative_magnitude', M=1.0)
+        honest = HonestDiD(method="relative_magnitude", M=1.0)
         bounds = honest.fit(results)
 
         # Should have valid (non-NaN) results
@@ -728,24 +787,25 @@ class TestEdgeCases:
         cs = CallawaySantAnna(base_period="universal")
         results = cs.fit(
             data,
-            outcome='outcome',
-            unit='unit',
-            time='period',
-            first_treat='first_treat',
-            aggregate='event_study'
+            outcome="outcome",
+            unit="unit",
+            time="period",
+            first_treat="first_treat",
+            aggregate="event_study",
         )
 
         # Verify reference period exists with n_groups=0
         assert -1 in results.event_study_effects
-        assert results.event_study_effects[-1]['n_groups'] == 0
+        assert results.event_study_effects[-1]["n_groups"] == 0
 
         # The max pre-violation calculation should exclude the reference period
-        honest = HonestDiD(method='relative_magnitude', M=1.0)
+        honest = HonestDiD(method="relative_magnitude", M=1.0)
 
         # Get pre_periods excluding reference (n_groups=0)
         real_pre_periods = [
-            t for t in results.event_study_effects
-            if t < 0 and results.event_study_effects[t].get('n_groups', 1) > 0
+            t
+            for t in results.event_study_effects
+            if t < 0 and results.event_study_effects[t].get("n_groups", 1) > 0
         ]
 
         # If there are real pre-periods, max_violation should be > 0
@@ -754,9 +814,7 @@ class TestEdgeCases:
             max_violation = honest._estimate_max_pre_violation(results, real_pre_periods)
             # Max violation should reflect actual pre-period coefficients, not 0
             # The actual effects are non-zero due to sampling variation
-            assert max_violation > 0, (
-                "max_pre_violation should be > 0 when real pre-periods exist"
-            )
+            assert max_violation > 0, "max_pre_violation should be > 0 when real pre-periods exist"
 
 
 # =============================================================================
@@ -769,8 +827,8 @@ class TestVisualizationNoMatplotlib:
 
     def test_sensitivity_results_has_plot_method(self, mock_multiperiod_results):
         """Test that SensitivityResults has plot method."""
-        honest = HonestDiD(method='relative_magnitude')
+        honest = HonestDiD(method="relative_magnitude")
         sensitivity = honest.sensitivity_analysis(mock_multiperiod_results)
 
-        assert hasattr(sensitivity, 'plot')
+        assert hasattr(sensitivity, "plot")
         assert callable(sensitivity.plot)

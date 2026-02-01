@@ -54,6 +54,10 @@ Results from MultiPeriodDiD event study estimation.
       ~MultiPeriodDiDResults.att
       ~MultiPeriodDiDResults.pre_periods
       ~MultiPeriodDiDResults.post_periods
+      ~MultiPeriodDiDResults.reference_period
+      ~MultiPeriodDiDResults.interaction_indices
+      ~MultiPeriodDiDResults.pre_period_effects
+      ~MultiPeriodDiDResults.post_period_effects
 
 PeriodEffect
 ------------

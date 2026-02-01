@@ -12,6 +12,7 @@ Additional estimators are in separate modules:
 For backward compatibility, all estimators are re-exported from this module.
 """
 
+import warnings
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -152,7 +153,7 @@ class DifferenceInDifferences:
         formula: Optional[str] = None,
         covariates: Optional[List[str]] = None,
         fixed_effects: Optional[List[str]] = None,
-        absorb: Optional[List[str]] = None
+        absorb: Optional[List[str]] = None,
     ) -> DiDResults:
         """
         Fit the Difference-in-Differences model.
@@ -380,9 +381,7 @@ class DifferenceInDifferences:
             (coefficients, residuals, fitted_values, r_squared)
         """
         # Use unified OLS backend
-        coefficients, residuals, fitted, _ = solve_ols(
-            X, y, return_fitted=True, return_vcov=False
-        )
+        coefficients, residuals, fitted, _ = solve_ols(X, y, return_fitted=True, return_vcov=False)
         r_squared = compute_r_squared(y, residuals)
 
         return coefficients, residuals, fitted, r_squared
@@ -417,13 +416,16 @@ class DifferenceInDifferences:
             (se, p_value, conf_int, t_stat, vcov, bootstrap_results)
         """
         bootstrap_results = wild_bootstrap_se(
-            X, y, residuals, cluster_ids,
+            X,
+            y,
+            residuals,
+            cluster_ids,
             coefficient_index=coefficient_index,
             n_bootstrap=self.n_bootstrap,
             weight_type=self.bootstrap_weights,
             alpha=self.alpha,
             seed=self.seed,
-            return_distribution=False
+            return_distribution=False,
         )
         self._bootstrap_results = bootstrap_results
 
@@ -536,7 +538,7 @@ class DifferenceInDifferences:
         outcome: str,
         treatment: str,
         time: str,
-        covariates: Optional[List[str]] = None
+        covariates: Optional[List[str]] = None,
     ) -> None:
         """Validate input data."""
         # Check DataFrame
@@ -702,15 +704,18 @@ class MultiPeriodDiD(DifferenceInDifferences):
     -----
     The model estimates:
 
-        Y_it = α + β*D_i + Σ_t γ_t*Period_t + Σ_t∈post δ_t*(D_i × Post_t) + ε_it
+        Y_it = α + β*D_i + Σ_t γ_t*Period_t + Σ_{t≠ref} δ_t*(D_i × 1{t}) + ε_it
 
     Where:
     - D_i is the treatment indicator
-    - Period_t are time period dummies
-    - D_i × Post_t are treatment-by-post-period interactions
+    - Period_t are time period dummies (all non-reference periods)
+    - D_i × 1{t} are treatment-by-period interactions (all non-reference)
     - δ_t are the period-specific treatment effects
+    - The reference period (default: last pre-period) has δ_ref = 0 by construction
 
-    The average ATT is computed as the mean of the δ_t coefficients.
+    Pre-treatment δ_t test the parallel trends assumption (should be ≈ 0).
+    Post-treatment δ_t estimate dynamic treatment effects.
+    The average ATT is computed from post-treatment δ_t only.
     """
 
     def fit(  # type: ignore[override]
@@ -723,7 +728,8 @@ class MultiPeriodDiD(DifferenceInDifferences):
         covariates: Optional[List[str]] = None,
         fixed_effects: Optional[List[str]] = None,
         absorb: Optional[List[str]] = None,
-        reference_period: Any = None
+        reference_period: Any = None,
+        unit: Optional[str] = None,
     ) -> MultiPeriodDiDResults:
         """
         Fit the Multi-Period Difference-in-Differences model.
@@ -749,7 +755,13 @@ class MultiPeriodDiD(DifferenceInDifferences):
             List of categorical column names for high-dimensional fixed effects.
         reference_period : any, optional
             The reference (omitted) time period for the period dummies.
-            Defaults to the first pre-treatment period.
+            Defaults to the last pre-treatment period (e=-1 convention).
+        unit : str, optional
+            Name of the unit identifier column. When provided, checks whether
+            treatment timing varies across units and warns if staggered adoption
+            is detected (suggests CallawaySantAnna instead). Does NOT affect
+            standard error computation -- use the ``cluster`` parameter for
+            cluster-robust SEs.
 
         Returns
         -------
@@ -763,24 +775,40 @@ class MultiPeriodDiD(DifferenceInDifferences):
         """
         # Warn if wild bootstrap is requested but not supported
         if self.inference == "wild_bootstrap":
-            import warnings
             warnings.warn(
                 "Wild bootstrap inference is not yet supported for MultiPeriodDiD. "
                 "Using analytical inference instead.",
-                UserWarning
+                UserWarning,
             )
 
         # Validate basic inputs
         if outcome is None or treatment is None or time is None:
-            raise ValueError(
-                "Must provide 'outcome', 'treatment', and 'time'"
-            )
+            raise ValueError("Must provide 'outcome', 'treatment', and 'time'")
 
         # Validate columns exist
         self._validate_data(data, outcome, treatment, time, covariates)
 
         # Validate treatment is binary
         validate_binary(data[treatment].values, "treatment")
+
+        # Validate unit column and check for staggered adoption
+        if unit is not None:
+            if unit not in data.columns:
+                raise ValueError(f"Unit column '{unit}' not found in data")
+
+            # Check for staggered treatment timing
+            treated_mask = data[treatment] == 1
+            if treated_mask.any():
+                treatment_timing = data.loc[treated_mask].groupby(unit)[time].min()
+                if treatment_timing.nunique() > 1:
+                    warnings.warn(
+                        "Treatment timing varies across units (staggered adoption "
+                        "detected). MultiPeriodDiD assumes simultaneous adoption "
+                        "and may produce biased estimates with staggered treatment. "
+                        "Consider using CallawaySantAnna or SunAbraham instead.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
 
         # Get all unique time periods
         all_periods = sorted(data[time].unique())
@@ -811,9 +839,33 @@ class MultiPeriodDiD(DifferenceInDifferences):
 
         # Determine reference period (omitted dummy)
         if reference_period is None:
-            reference_period = pre_periods[0]
+            # Default: last pre-period (e=-1 convention, matches fixest)
+            if len(pre_periods) > 1:
+                warnings.warn(
+                    f"The default reference_period is changing from the first "
+                    f"pre-period ({pre_periods[0]}) to the last pre-period "
+                    f"({pre_periods[-1]}) to match the standard e=-1 convention. "
+                    f"To silence this warning, pass "
+                    f"reference_period={pre_periods[-1]} explicitly. "
+                    f"In a future version, the default will be the last "
+                    f"pre-period.",
+                    FutureWarning,
+                    stacklevel=2,
+                )
+            reference_period = pre_periods[-1]
         elif reference_period not in all_periods:
             raise ValueError(f"Reference period '{reference_period}' not found in time column")
+
+        # Warn if reference period is a post-treatment period
+        if reference_period in post_periods:
+            warnings.warn(
+                f"reference_period={reference_period} is a post-treatment period. "
+                f"The reference period should typically be a pre-treatment period "
+                f"(e.g., the last pre-period). Post-period references alter the "
+                f"interpretation of all coefficients.",
+                UserWarning,
+                stacklevel=2,
+            )
 
         # Validate fixed effects and absorb columns
         if fixed_effects:
@@ -857,11 +909,12 @@ class MultiPeriodDiD(DifferenceInDifferences):
             var_names.append(f"period_{period}")
             period_dummy_indices[period] = X.shape[1] - 1
 
-        # Add treatment × post-period interactions
-        # These are our coefficients of interest
-        interaction_indices = {}  # Map post-period -> column index in X
+        # Add treatment × period interactions for ALL non-reference periods
+        # Pre-period interactions test parallel trends; post-period interactions
+        # estimate dynamic treatment effects
+        interaction_indices = {}  # Map period -> column index in X
 
-        for period in post_periods:
+        for period in non_ref_periods:
             interaction = d * (t == period).astype(float)
             X = np.column_stack([X, interaction])
             var_names.append(f"{treatment}:period_{period}")
@@ -889,7 +942,8 @@ class MultiPeriodDiD(DifferenceInDifferences):
         # Note: Wild bootstrap for multi-period effects is complex (multiple coefficients)
         # For now, we use analytical inference even if inference="wild_bootstrap"
         coefficients, residuals, fitted, vcov = solve_ols(
-            X, y,
+            X,
+            y,
             return_fitted=True,
             return_vcov=True,
             cluster_ids=cluster_ids,
@@ -915,21 +969,23 @@ class MultiPeriodDiD(DifferenceInDifferences):
             else:
                 # For rank-deficient case, compute vcov on reduced matrix then expand
                 X_reduced = X[:, identified_mask]
-                vcov_reduced = np.linalg.solve(X_reduced.T @ X_reduced, mse * np.eye(X_reduced.shape[1]))
+                vcov_reduced = np.linalg.solve(
+                    X_reduced.T @ X_reduced, mse * np.eye(X_reduced.shape[1])
+                )
                 # Expand to full size with NaN for dropped columns
                 vcov = np.full((X.shape[1], X.shape[1]), np.nan)
                 vcov[np.ix_(identified_mask, identified_mask)] = vcov_reduced
 
-        # Extract period-specific treatment effects
+        # Extract period-specific treatment effects for ALL non-reference periods
         period_effects = {}
-        effect_values = []
-        effect_indices = []
+        post_effect_values = []
+        post_effect_indices = []
 
-        for period in post_periods:
+        for period in non_ref_periods:
             idx = interaction_indices[period]
             effect = coefficients[idx]
             se = np.sqrt(vcov[idx, idx])
-            t_stat = effect / se
+            t_stat = effect / se if np.isfinite(se) and se > 0 else np.nan
             p_value = compute_p_value(t_stat, df=df)
             conf_int = compute_confidence_interval(effect, se, self.alpha, df=df)
 
@@ -939,14 +995,16 @@ class MultiPeriodDiD(DifferenceInDifferences):
                 se=se,
                 t_stat=t_stat,
                 p_value=p_value,
-                conf_int=conf_int
+                conf_int=conf_int,
             )
-            effect_values.append(effect)
-            effect_indices.append(idx)
 
-        # Compute average treatment effect
-        # R-style NA propagation: if ANY period effect is NaN, average is undefined
-        effect_arr = np.array(effect_values)
+            if period in post_periods:
+                post_effect_values.append(effect)
+                post_effect_indices.append(idx)
+
+        # Compute average treatment effect (post-periods only)
+        # R-style NA propagation: if ANY post-period effect is NaN, average is undefined
+        effect_arr = np.array(post_effect_values)
 
         if np.any(np.isnan(effect_arr)):
             # Some period effects are NaN (unidentified) - cannot compute valid average
@@ -962,8 +1020,8 @@ class MultiPeriodDiD(DifferenceInDifferences):
 
             # Standard error of average: need to account for covariance
             n_post = len(post_periods)
-            sub_vcov = vcov[np.ix_(effect_indices, effect_indices)]
-            avg_var = np.sum(sub_vcov) / (n_post ** 2)
+            sub_vcov = vcov[np.ix_(post_effect_indices, post_effect_indices)]
+            avg_var = np.sum(sub_vcov) / (n_post**2)
 
             if np.isnan(avg_var) or avg_var < 0:
                 # Vcov has NaN (dropped columns) - propagate NaN
@@ -1009,6 +1067,8 @@ class MultiPeriodDiD(DifferenceInDifferences):
             residuals=residuals,
             fitted_values=fitted,
             r_squared=r_squared,
+            reference_period=reference_period,
+            interaction_indices=interaction_indices,
         )
 
         self._coefficients = coefficients

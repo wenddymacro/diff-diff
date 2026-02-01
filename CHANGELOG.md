@@ -7,10 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **MultiPeriodDiD: Full event-study specification** (BREAKING)
+  - Treatment × period interactions now created for ALL periods (pre and post),
+    not just post-treatment
+  - Pre-period coefficients available for parallel trends assessment
+  - Default reference period changed from first to last pre-period (e=-1 convention)
+    with FutureWarning for one release cycle
+  - `period_effects` dict now contains both pre and post period effects
+  - `to_dataframe()` includes `is_post` column
+  - `summary()` output now shows pre-period effects section
+  - t_stat uses `np.isfinite(se) and se > 0` guard (consistent with other estimators)
+
+### Added
+- `unit` parameter to `MultiPeriodDiD.fit()` for staggered adoption detection
+- `reference_period` and `interaction_indices` attributes on `MultiPeriodDiDResults`
+- `pre_period_effects` and `post_period_effects` convenience properties on results
+- Pre-period section in `summary()` output with reference period indicator
+- Warning when `reference_period` is set to a post-treatment period
+- Staggered adoption warning when treatment timing varies across units (with `unit` param)
+- Informative KeyError when accessing reference period via `get_effect()`
+
 ### Removed
 - **TROP `variance_method` parameter** — Jackknife variance estimation removed.
   Bootstrap (the only method specified in Athey et al. 2025) is now always used.
   The `variance_method` field has also been removed from `TROPResults`.
+
+### Fixed
+- HonestDiD VCV extraction: now uses interaction sub-VCV instead of full regression VCV
+  (via `interaction_indices` period → column index mapping)
 
 ## [2.2.0] - 2026-01-27
 

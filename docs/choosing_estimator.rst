@@ -107,9 +107,10 @@ Multi-Period Event Study
 
 Use :class:`~diff_diff.MultiPeriodDiD` when:
 
-- You want to visualize treatment effects over time
-- You need to test for pre-trends (placebo effects before treatment)
-- You want to examine treatment effect dynamics
+- You want a full event-study with pre and post treatment effects
+- You need pre-period coefficients to assess parallel trends
+- You want to visualize treatment effect dynamics over time
+- All treated units receive treatment at the same time (simultaneous adoption)
 
 .. code-block:: python
 
