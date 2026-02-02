@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **MultiPeriodDiD: Full event-study specification** (BREAKING)
+  - Treatment × period interactions now created for ALL periods (pre and post),
+    not just post-treatment
+  - Pre-period coefficients available for parallel trends assessment
+  - Default reference period changed from first to last pre-period (e=-1 convention)
+    with FutureWarning for one release cycle
+  - `period_effects` dict now contains both pre and post period effects
+  - `to_dataframe()` includes `is_post` column
+  - `summary()` output now shows pre-period effects section
+  - t_stat uses `np.isfinite(se) and se > 0` guard (consistent with other estimators)
+
+### Added
+- Time-varying treatment warning when `unit` is provided and treatment varies
+  within units (guides users toward ever-treated indicator D_i)
+- `unit` parameter to `MultiPeriodDiD.fit()` for staggered adoption detection
+- `reference_period` and `interaction_indices` attributes on `MultiPeriodDiDResults`
+- `pre_period_effects` and `post_period_effects` convenience properties on results
+- Pre-period section in `summary()` output with reference period indicator
+- `ValueError` when `reference_period` is set to a post-treatment period
+- Staggered adoption warning when treatment timing varies across units (with `unit` param)
+- Informative KeyError when accessing reference period via `get_effect()`
+
 ### Removed
 - **TROP `variance_method` parameter** — Jackknife variance estimation removed.
   Bootstrap (the only method specified in Athey et al. 2025) is now always used.
@@ -17,6 +40,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was not specified in the paper. LOOCV now uses all control observations, making
   tuning fully deterministic. Inner LOOCV loops in the Rust backend are parallelized
   to compensate for the increased observation count.
+
+### Fixed
+- HonestDiD: filter non-finite period effects from MultiPeriodDiD results
+  (prevents NaN propagation into sensitivity bounds; raises ValueError
+  when no finite pre- or post-period effects remain)
+- HonestDiD VCV extraction: now uses interaction sub-VCV instead of full regression VCV
+  (via `interaction_indices` period → column index mapping)
+- MultiPeriodDiD: `avg_se` guard now checks `np.isfinite()` (matches per-period pattern;
+  prevents `avg_t_stat=0` / `avg_p_value=1` when variance is infinite)
+- HonestDiD: extraction now uses explicit pre-then-post ordering instead of sorted period
+  labels (prevents misclassification when period labels don't sort chronologically)
 
 ## [2.2.0] - 2026-01-27
 

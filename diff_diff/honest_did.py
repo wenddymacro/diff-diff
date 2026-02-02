@@ -192,9 +192,7 @@ class HonestDiDResults:
     ci_method: str = "FLCI"
     original_results: Optional[Any] = field(default=None, repr=False)
     # Event study bounds (optional)
-    event_study_bounds: Optional[Dict[Any, Dict[str, float]]] = field(
-        default=None, repr=False
-    )
+    event_study_bounds: Optional[Dict[Any, Dict[str, float]]] = field(default=None, repr=False)
 
     def __repr__(self) -> str:
         sig = "" if self.ci_lb <= 0 <= self.ci_ub else "*"
@@ -276,11 +274,13 @@ class HonestDiDResults:
         ]
 
         # Interpretation
-        lines.extend([
-            "-" * 70,
-            "Interpretation".center(70),
-            "-" * 70,
-        ])
+        lines.extend(
+            [
+                "-" * 70,
+                "Interpretation".center(70),
+                "-" * 70,
+            ]
+        )
 
         if self.method == "relative_magnitude":
             lines.append(
@@ -294,9 +294,7 @@ class HonestDiDResults:
                     f"Violation curvature (second diff) bounded by {self.M:.4f} per period."
                 )
         else:
-            lines.append(
-                f"Combined smoothness (M={self.M:.2f}) and relative magnitude bounds."
-            )
+            lines.append(f"Combined smoothness (M={self.M:.2f}) and relative magnitude bounds.")
 
         if self.is_significant:
             if self.ci_lb > 0:
@@ -304,9 +302,7 @@ class HonestDiDResults:
             else:
                 lines.append(f"Effect remains NEGATIVE even with violations up to M={self.M}.")
         else:
-            lines.append(
-                f"Cannot rule out zero effect when allowing violations up to M={self.M}."
-            )
+            lines.append(f"Cannot rule out zero effect when allowing violations up to M={self.M}.")
 
         lines.extend(["", "=" * 70])
 
@@ -378,10 +374,7 @@ class SensitivityResults:
 
     def __repr__(self) -> str:
         breakdown_str = f"{self.breakdown_M:.4f}" if self.breakdown_M else "None"
-        return (
-            f"SensitivityResults(n_M={len(self.M_values)}, "
-            f"breakdown_M={breakdown_str})"
-        )
+        return f"SensitivityResults(n_M={len(self.M_values)}, " f"breakdown_M={breakdown_str})"
 
     @property
     def has_breakdown(self) -> bool:
@@ -405,18 +398,18 @@ class SensitivityResults:
         if self.breakdown_M is not None:
             lines.append(f"{'Breakdown value:':<30} {self.breakdown_M:.4f}")
             lines.append("")
-            lines.append(
-                f"Result is robust to violations up to M = {self.breakdown_M:.4f}"
-            )
+            lines.append(f"Result is robust to violations up to M = {self.breakdown_M:.4f}")
         else:
             lines.append(f"{'Breakdown value:':<30} None (always significant)")
 
-        lines.extend([
-            "",
-            "-" * 70,
-            f"{'M':<10} {'Lower Bound':>12} {'Upper Bound':>12} {'CI Lower':>12} {'CI Upper':>12}",
-            "-" * 70,
-        ])
+        lines.extend(
+            [
+                "",
+                "-" * 70,
+                f"{'M':<10} {'Lower Bound':>12} {'Upper Bound':>12} {'CI Lower':>12} {'CI Upper':>12}",
+                "-" * 70,
+            ]
+        )
 
         for i, M in enumerate(self.M_values):
             lb, ub = self.bounds[i]
@@ -437,18 +430,26 @@ class SensitivityResults:
         for i, M in enumerate(self.M_values):
             lb, ub = self.bounds[i]
             ci_lb, ci_ub = self.robust_cis[i]
-            rows.append({
-                "M": M,
-                "lb": lb,
-                "ub": ub,
-                "ci_lb": ci_lb,
-                "ci_ub": ci_ub,
-                "is_significant": not (ci_lb <= 0 <= ci_ub),
-            })
+            rows.append(
+                {
+                    "M": M,
+                    "lb": lb,
+                    "ub": ub,
+                    "ci_lb": ci_lb,
+                    "ci_ub": ci_ub,
+                    "is_significant": not (ci_lb <= 0 <= ci_ub),
+                }
+            )
         return pd.DataFrame(rows)
 
-    def plot(self, ax=None, show_bounds: bool = True, show_ci: bool = True,
-             breakdown_line: bool = True, **kwargs):
+    def plot(
+        self,
+        ax=None,
+        show_bounds: bool = True,
+        show_ci: bool = True,
+        breakdown_line: bool = True,
+        **kwargs,
+    ):
         """
         Plot sensitivity analysis results.
 
@@ -483,28 +484,45 @@ class SensitivityResults:
         ci_arr = np.array(self.robust_cis)
 
         # Plot original estimate
-        ax.axhline(y=self.original_estimate, color='black', linestyle='-',
-                   linewidth=1.5, label='Original estimate', alpha=0.7)
+        ax.axhline(
+            y=self.original_estimate,
+            color="black",
+            linestyle="-",
+            linewidth=1.5,
+            label="Original estimate",
+            alpha=0.7,
+        )
 
         # Plot zero line
-        ax.axhline(y=0, color='gray', linestyle='--', linewidth=1, alpha=0.5)
+        ax.axhline(y=0, color="gray", linestyle="--", linewidth=1, alpha=0.5)
 
         if show_bounds:
-            ax.fill_between(M, bounds_arr[:, 0], bounds_arr[:, 1],
-                            alpha=0.3, color='blue', label='Identified set')
+            ax.fill_between(
+                M,
+                bounds_arr[:, 0],
+                bounds_arr[:, 1],
+                alpha=0.3,
+                color="blue",
+                label="Identified set",
+            )
 
         if show_ci:
-            ax.plot(M, ci_arr[:, 0], 'b-', linewidth=1.5, label='Robust CI')
-            ax.plot(M, ci_arr[:, 1], 'b-', linewidth=1.5)
+            ax.plot(M, ci_arr[:, 0], "b-", linewidth=1.5, label="Robust CI")
+            ax.plot(M, ci_arr[:, 1], "b-", linewidth=1.5)
 
         if breakdown_line and self.breakdown_M is not None:
-            ax.axvline(x=self.breakdown_M, color='red', linestyle=':',
-                       linewidth=2, label=f'Breakdown (M={self.breakdown_M:.2f})')
+            ax.axvline(
+                x=self.breakdown_M,
+                color="red",
+                linestyle=":",
+                linewidth=2,
+                label=f"Breakdown (M={self.breakdown_M:.2f})",
+            )
 
-        ax.set_xlabel('M (restriction parameter)')
-        ax.set_ylabel('Treatment Effect')
-        ax.set_title('Sensitivity Analysis: Treatment Effect Bounds')
-        ax.legend(loc='best')
+        ax.set_xlabel("M (restriction parameter)")
+        ax.set_ylabel("Treatment Effect")
+        ax.set_title("Sensitivity Analysis: Treatment Effect Bounds")
+        ax.legend(loc="best")
 
         return ax
 
@@ -515,7 +533,7 @@ class SensitivityResults:
 
 
 def _extract_event_study_params(
-    results: Union[MultiPeriodDiDResults, Any]
+    results: Union[MultiPeriodDiDResults, Any],
 ) -> Tuple[np.ndarray, np.ndarray, int, int, List[Any], List[Any]]:
     """
     Extract event study parameters from results objects.
@@ -545,28 +563,47 @@ def _extract_event_study_params(
         pre_periods = results.pre_periods
         post_periods = results.post_periods
 
-        # Get coefficients - need to extract from period_effects
-        # Note: MultiPeriodDiD stores effects for post-periods only in period_effects
-        # Pre-period effects would be in the coefficients dict if estimated
-        effects = []
-        ses = []
+        # Filter periods with finite effects/SEs, maintaining pre-then-post order
+        finite_periods = {
+            p
+            for p in results.period_effects.keys()
+            if np.isfinite(results.period_effects[p].effect)
+            and np.isfinite(results.period_effects[p].se)
+        }
 
-        # For now, we'll work with post-period effects
-        # In a full event study, we'd also have pre-period coefficients
-        for period in post_periods:
-            pe = results.period_effects[period]
-            effects.append(pe.effect)
-            ses.append(pe.se)
+        pre_estimated = [p for p in pre_periods if p in finite_periods]
+        post_estimated = [p for p in post_periods if p in finite_periods]
+        all_estimated = pre_estimated + post_estimated
+
+        if not all_estimated:
+            raise ValueError(
+                "No period effects with finite estimates found. " "Cannot compute HonestDiD bounds."
+            )
+
+        effects = [results.period_effects[p].effect for p in all_estimated]
+        ses = [results.period_effects[p].se for p in all_estimated]
 
         beta_hat = np.array(effects)
-        num_post_periods = len(post_periods)
-        num_pre_periods = len(pre_periods) if pre_periods else 0
+        num_pre_periods = sum(1 for p in all_estimated if p in pre_periods)
+        num_post_periods = sum(1 for p in all_estimated if p in post_periods)
 
-        # Get vcov if available
-        if results.vcov is not None:
-            sigma = results.vcov
+        if num_pre_periods == 0:
+            raise ValueError(
+                "No pre-period effects with finite estimates found. "
+                "HonestDiD requires at least one identified pre-period "
+                "coefficient."
+            )
+
+        # Extract proper sub-VCV for interaction terms
+        if (
+            results.vcov is not None
+            and hasattr(results, "interaction_indices")
+            and results.interaction_indices is not None
+        ):
+            indices = [results.interaction_indices[p] for p in all_estimated]
+            sigma = results.vcov[np.ix_(indices, indices)]
         else:
-            # Construct diagonal vcov from SEs
+            # Fallback: diagonal from SEs
             sigma = np.diag(np.array(ses) ** 2)
 
         return beta_hat, sigma, num_pre_periods, num_post_periods, pre_periods, post_periods
@@ -575,6 +612,7 @@ def _extract_event_study_params(
         # Try CallawaySantAnnaResults
         try:
             from diff_diff.staggered import CallawaySantAnnaResults
+
             if isinstance(results, CallawaySantAnnaResults):
                 if results.event_study_effects is None:
                     raise ValueError(
@@ -586,9 +624,9 @@ def _extract_event_study_params(
                 # Extract event study effects by relative time
                 # Filter out normalization constraints (n_groups=0) and non-finite SEs
                 event_effects = {
-                    t: data for t, data in results.event_study_effects.items()
-                    if data.get('n_groups', 1) > 0
-                    and np.isfinite(data.get('se', np.nan))
+                    t: data
+                    for t, data in results.event_study_effects.items()
+                    if data.get("n_groups", 1) > 0 and np.isfinite(data.get("se", np.nan))
                 }
                 rel_times = sorted(event_effects.keys())
 
@@ -599,17 +637,13 @@ def _extract_event_study_params(
                 effects = []
                 ses = []
                 for t in rel_times:
-                    effects.append(event_effects[t]['effect'])
-                    ses.append(event_effects[t]['se'])
+                    effects.append(event_effects[t]["effect"])
+                    ses.append(event_effects[t]["se"])
 
                 beta_hat = np.array(effects)
                 sigma = np.diag(np.array(ses) ** 2)
 
-                return (
-                    beta_hat, sigma,
-                    len(pre_times), len(post_times),
-                    pre_times, post_times
-                )
+                return (beta_hat, sigma, len(pre_times), len(post_times), pre_times, post_times)
         except ImportError:
             pass
 
@@ -644,17 +678,15 @@ def _construct_A_sd(num_periods: int) -> np.ndarray:
 
     for i in range(n_constraints):
         # Second difference: delta_{t+1} - 2*delta_t + delta_{t-1}
-        A[i, i] = 1      # delta_{t-1}
+        A[i, i] = 1  # delta_{t-1}
         A[i, i + 1] = -2  # delta_t
-        A[i, i + 2] = 1   # delta_{t+1}
+        A[i, i + 2] = 1  # delta_{t+1}
 
     return A
 
 
 def _construct_constraints_sd(
-    num_pre_periods: int,
-    num_post_periods: int,
-    M: float
+    num_pre_periods: int, num_post_periods: int, M: float
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Construct smoothness constraint matrices.
@@ -692,10 +724,7 @@ def _construct_constraints_sd(
 
 
 def _construct_constraints_rm(
-    num_pre_periods: int,
-    num_post_periods: int,
-    Mbar: float,
-    max_pre_violation: float
+    num_pre_periods: int, num_post_periods: int, Mbar: float, max_pre_violation: float
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Construct relative magnitudes constraint matrices.
@@ -731,7 +760,7 @@ def _construct_constraints_rm(
 
     for i in range(num_post_periods):
         post_idx = num_pre_periods + i
-        A_ineq[2 * i, post_idx] = 1      # delta <= bound
+        A_ineq[2 * i, post_idx] = 1  # delta <= bound
         A_ineq[2 * i + 1, post_idx] = -1  # -delta <= bound
 
     return A_ineq, b_ineq
@@ -743,7 +772,7 @@ def _solve_bounds_lp(
     A_ineq: np.ndarray,
     b_ineq: np.ndarray,
     num_pre_periods: int,
-    lp_method: str = 'highs'
+    lp_method: str = "highs",
 ) -> Tuple[float, float]:
     """
     Solve for identified set bounds using linear programming.
@@ -789,7 +818,7 @@ def _solve_bounds_lp(
     # where delta_post = delta[num_pre_periods:]
 
     c = np.zeros(total_periods)
-    c[num_pre_periods:num_pre_periods + num_post] = -l_vec  # min -l'@delta = max l'@delta
+    c[num_pre_periods : num_pre_periods + num_post] = -l_vec  # min -l'@delta = max l'@delta
 
     # For upper bound: max l'@(beta - delta) = l'@beta + max(-l'@delta)
     # For lower bound: min l'@(beta - delta) = l'@beta + min(-l'@delta)
@@ -801,9 +830,7 @@ def _solve_bounds_lp(
     # Solve for lower bound of -l'@delta (which gives upper bound of theta)
     try:
         result_min = optimize.linprog(
-            c, A_ub=A_ineq, b_ub=b_ineq,
-            bounds=(None, None),
-            method=lp_method
+            c, A_ub=A_ineq, b_ub=b_ineq, bounds=(None, None), method=lp_method
         )
         if result_min.success:
             min_val = result_min.fun
@@ -816,9 +843,7 @@ def _solve_bounds_lp(
     # Solve for upper bound of -l'@delta (which gives lower bound of theta)
     try:
         result_max = optimize.linprog(
-            -c, A_ub=A_ineq, b_ub=b_ineq,
-            bounds=(None, None),
-            method=lp_method
+            -c, A_ub=A_ineq, b_ub=b_ineq, bounds=(None, None), method=lp_method
         )
         if result_max.success:
             max_val = -result_max.fun
@@ -835,12 +860,7 @@ def _solve_bounds_lp(
     return lb, ub
 
 
-def _compute_flci(
-    lb: float,
-    ub: float,
-    se: float,
-    alpha: float = 0.05
-) -> Tuple[float, float]:
+def _compute_flci(lb: float, ub: float, se: float, alpha: float = 0.05) -> Tuple[float, float]:
     """
     Compute Fixed Length Confidence Interval (FLCI).
 
@@ -888,7 +908,7 @@ def _compute_clf_ci(
     Mbar: float,
     max_pre_violation: float,
     alpha: float = 0.05,
-    n_draws: int = 1000
+    n_draws: int = 1000,
 ) -> Tuple[float, float, float, float]:
     """
     Compute Conditional Least Favorable (C-LF) confidence interval.
@@ -1066,11 +1086,12 @@ class HonestDiD:
         M = M if M is not None else self.M
 
         # Extract event study parameters
-        (beta_hat, sigma, num_pre, num_post,
-         pre_periods, post_periods) = _extract_event_study_params(results)
+        (beta_hat, sigma, num_pre, num_post, pre_periods, post_periods) = (
+            _extract_event_study_params(results)
+        )
 
-        # beta_hat from MultiPeriodDiDResults already contains only post-periods
-        # Check if we have the right number of coefficients
+        # beta_hat contains [pre-period effects, post-period effects] in order.
+        # Extract just the post-period effects for HonestDiD bounds.
         if len(beta_hat) == num_post:
             # Already just post-period effects
             beta_post = beta_hat
@@ -1089,10 +1110,17 @@ class HonestDiD:
             sigma_post = sigma[num_pre:, num_pre:]
         else:
             # Construct diagonal from available dimensions
-            sigma_post = sigma[:len(beta_post), :len(beta_post)]
+            sigma_post = sigma[: len(beta_post), : len(beta_post)]
 
         # Update num_post to match actual data
         num_post = len(beta_post)
+
+        if num_post == 0:
+            raise ValueError(
+                "No post-period effects with finite estimates found. "
+                "HonestDiD requires at least one identified post-period "
+                "coefficient to compute bounds."
+            )
 
         # Set up weighting vector
         if self.l_vec is None:
@@ -1100,9 +1128,7 @@ class HonestDiD:
         else:
             l_vec = np.asarray(self.l_vec)
             if len(l_vec) != num_post:
-                raise ValueError(
-                    f"l_vec must have length {num_post}, got {len(l_vec)}"
-                )
+                raise ValueError(f"l_vec must have length {num_post}, got {len(l_vec)}")
 
         # Compute original estimate and SE
         original_estimate = np.dot(l_vec, beta_post)
@@ -1117,15 +1143,13 @@ class HonestDiD:
 
         elif self.method == "relative_magnitude":
             lb, ub, ci_lb, ci_ub = self._compute_rm_bounds(
-                beta_post, sigma_post, l_vec, num_pre, num_post, M,
-                pre_periods, results
+                beta_post, sigma_post, l_vec, num_pre, num_post, M, pre_periods, results
             )
             ci_method = "C-LF"
 
         else:  # combined
             lb, ub, ci_lb, ci_ub = self._compute_combined_bounds(
-                beta_post, sigma_post, l_vec, num_pre, num_post, M,
-                pre_periods, results
+                beta_post, sigma_post, l_vec, num_pre, num_post, M, pre_periods, results
             )
             ci_method = "FLCI"
 
@@ -1150,7 +1174,7 @@ class HonestDiD:
         l_vec: np.ndarray,
         num_pre: int,
         num_post: int,
-        M: float
+        M: float,
     ) -> Tuple[float, float, float, float]:
         """Compute bounds under smoothness restriction."""
         # Construct constraints
@@ -1174,7 +1198,7 @@ class HonestDiD:
         num_post: int,
         Mbar: float,
         pre_periods: List,
-        results: Any
+        results: Any,
     ) -> Tuple[float, float, float, float]:
         """Compute bounds under relative magnitudes restriction."""
         # Estimate max pre-period violation from pre-trends
@@ -1204,7 +1228,7 @@ class HonestDiD:
         num_post: int,
         M: float,
         pre_periods: List,
-        results: Any
+        results: Any,
     ) -> Tuple[float, float, float, float]:
         """Compute bounds under combined smoothness + RM restriction."""
         # Get smoothness bounds
@@ -1232,11 +1256,7 @@ class HonestDiD:
 
         return lb, ub, ci_lb, ci_ub
 
-    def _estimate_max_pre_violation(
-        self,
-        results: Any,
-        pre_periods: List
-    ) -> float:
+    def _estimate_max_pre_violation(self, results: Any, pre_periods: List) -> float:
         """
         Estimate the maximum pre-period violation.
 
@@ -1244,19 +1264,15 @@ class HonestDiD:
         a default based on the overall SE.
         """
         if isinstance(results, MultiPeriodDiDResults):
-            # Check if we have pre-period effects
-            # In a standard event study, pre-period coefficients should be ~0
-            # Their magnitude indicates the pre-trend violation
-            if hasattr(results, 'coefficients') and results.coefficients:
-                # Look for pre-period coefficients
-                pre_effects = []
-                for period in pre_periods:
-                    key = f"treated:period_{period}"
-                    if key in results.coefficients:
-                        pre_effects.append(abs(results.coefficients[key]))
-
-                if pre_effects:
-                    return max(pre_effects)
+            # Pre-period effects are now in period_effects directly
+            # Filter out non-finite effects (e.g. from rank-deficient designs)
+            pre_effects = [
+                abs(results.period_effects[p].effect)
+                for p in pre_periods
+                if p in results.period_effects and np.isfinite(results.period_effects[p].effect)
+            ]
+            if pre_effects:
+                return max(pre_effects)
 
             # Fallback: use avg_se as a scale
             return results.avg_se
@@ -1264,14 +1280,14 @@ class HonestDiD:
         # For CallawaySantAnna, use pre-period event study effects
         try:
             from diff_diff.staggered import CallawaySantAnnaResults
+
             if isinstance(results, CallawaySantAnnaResults):
                 if results.event_study_effects:
                     # Filter out normalization constraints (n_groups=0, e.g. reference period)
                     pre_effects = [
-                        abs(results.event_study_effects[t]['effect'])
+                        abs(results.event_study_effects[t]["effect"])
                         for t in results.event_study_effects
-                        if t < 0
-                        and results.event_study_effects[t].get('n_groups', 1) > 0
+                        if t < 0 and results.event_study_effects[t].get("n_groups", 1) > 0
                     ]
                     if pre_effects:
                         return max(pre_effects)
@@ -1336,10 +1352,7 @@ class HonestDiD:
         )
 
     def _find_breakdown(
-        self,
-        results: Any,
-        M_values: np.ndarray,
-        ci_list: List[Tuple[float, float]]
+        self, results: Any, M_values: np.ndarray, ci_list: List[Tuple[float, float]]
     ) -> Optional[float]:
         """
         Find the breakdown value where CI first includes zero.
@@ -1379,9 +1392,7 @@ class HonestDiD:
         return None
 
     def breakdown_value(
-        self,
-        results: Union[MultiPeriodDiDResults, Any],
-        tol: float = 0.01
+        self, results: Union[MultiPeriodDiDResults, Any], tol: float = 0.01
     ) -> Optional[float]:
         """
         Find the breakdown value directly using binary search.
@@ -1470,7 +1481,7 @@ def sensitivity_plot(
     M_grid: Optional[List[float]] = None,
     alpha: float = 0.05,
     ax=None,
-    **kwargs
+    **kwargs,
 ):
     """
     Create a sensitivity analysis plot.

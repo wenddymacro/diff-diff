@@ -151,27 +151,19 @@ class PreTrendsPowerResults:
         ]
 
         if self.power_adequate:
-            lines.append(
-                f"✓ Power ({self.power:.0%}) meets target ({self.target_power:.0%})."
-            )
+            lines.append(f"✓ Power ({self.power:.0%}) meets target ({self.target_power:.0%}).")
             lines.append(
                 f"  The pre-trends test would detect violations of magnitude {self.violation_magnitude:.3f}."
             )
         else:
-            lines.append(
-                f"✗ Power ({self.power:.0%}) below target ({self.target_power:.0%})."
-            )
+            lines.append(f"✗ Power ({self.power:.0%}) below target ({self.target_power:.0%}).")
             lines.append(
                 f"  Would need violations of {self.mdv:.3f} to achieve {self.target_power:.0%} power."
             )
 
         lines.append("")
-        lines.append(
-            f"Minimum detectable violation (MDV): {self.mdv:.4f}"
-        )
-        lines.append(
-            "  → Passing pre-trends test does NOT rule out violations up to this size."
-        )
+        lines.append(f"Minimum detectable violation (MDV): {self.mdv:.4f}")
+        lines.append("  → Passing pre-trends test does NOT rule out violations up to this size.")
 
         lines.extend(["", "=" * 70])
 
@@ -289,21 +281,27 @@ class PreTrendsPowerCurve:
     violation_type: str
 
     def __repr__(self) -> str:
-        return (
-            f"PreTrendsPowerCurve(n_points={len(self.M_values)}, "
-            f"mdv={self.mdv:.4f})"
-        )
+        return f"PreTrendsPowerCurve(n_points={len(self.M_values)}, " f"mdv={self.mdv:.4f})"
 
     def to_dataframe(self) -> pd.DataFrame:
         """Convert to DataFrame with M and power columns."""
-        return pd.DataFrame({
-            "M": self.M_values,
-            "power": self.powers,
-        })
+        return pd.DataFrame(
+            {
+                "M": self.M_values,
+                "power": self.powers,
+            }
+        )
 
-    def plot(self, ax=None, show_mdv: bool = True, show_target: bool = True,
-             color: str = "#2563eb", mdv_color: str = "#dc2626",
-             target_color: str = "#22c55e", **kwargs):
+    def plot(
+        self,
+        ax=None,
+        show_mdv: bool = True,
+        show_target: bool = True,
+        color: str = "#2563eb",
+        mdv_color: str = "#dc2626",
+        target_color: str = "#22c55e",
+        **kwargs,
+    ):
         """
         Plot the power curve.
 
@@ -338,26 +336,35 @@ class PreTrendsPowerCurve:
             fig, ax = plt.subplots(figsize=(10, 6))
 
         # Plot power curve
-        ax.plot(self.M_values, self.powers, color=color, linewidth=2,
-                label="Power", **kwargs)
+        ax.plot(self.M_values, self.powers, color=color, linewidth=2, label="Power", **kwargs)
 
         # Target power line
         if show_target:
-            ax.axhline(y=self.target_power, color=target_color, linestyle="--",
-                       linewidth=1.5, alpha=0.7,
-                       label=f"Target power ({self.target_power:.0%})")
+            ax.axhline(
+                y=self.target_power,
+                color=target_color,
+                linestyle="--",
+                linewidth=1.5,
+                alpha=0.7,
+                label=f"Target power ({self.target_power:.0%})",
+            )
 
         # MDV line
         if show_mdv and self.mdv is not None and np.isfinite(self.mdv):
-            ax.axvline(x=self.mdv, color=mdv_color, linestyle=":",
-                       linewidth=1.5, alpha=0.7,
-                       label=f"MDV = {self.mdv:.3f}")
+            ax.axvline(
+                x=self.mdv,
+                color=mdv_color,
+                linestyle=":",
+                linewidth=1.5,
+                alpha=0.7,
+                label=f"MDV = {self.mdv:.3f}",
+            )
 
         ax.set_xlabel("Violation Magnitude (M)")
         ax.set_ylabel("Power")
         ax.set_title("Pre-Trends Test Power Curve")
         ax.set_ylim(0, 1.05)
-        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.0%}'))
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0%}"))
         ax.legend(loc="lower right")
         ax.grid(True, alpha=0.3)
 
@@ -450,9 +457,7 @@ class PreTrendsPower:
                 f"got '{violation_type}'"
             )
         if violation_type == "custom" and violation_weights is None:
-            raise ValueError(
-                "violation_weights must be provided when violation_type='custom'"
-            )
+            raise ValueError("violation_weights must be provided when violation_type='custom'")
 
         self.alpha = alpha
         self.target_power = power
@@ -566,88 +571,41 @@ class PreTrendsPower:
                     "parameter to specify which are actually pre-treatment."
                 )
 
-            # Only include periods with actual estimated coefficients
-            # (excludes the reference period which is omitted from estimation)
-            if hasattr(results, 'coefficients') and results.coefficients:
-                # Find which pre-periods have estimated coefficients
-                estimated_pre_periods = [
-                    p for p in all_pre_periods
-                    if f"treated:period_{p}" in results.coefficients
-                ]
+            # Pre-period effects are in period_effects (excluding reference period)
+            estimated_pre_periods = [
+                p
+                for p in all_pre_periods
+                if p in results.period_effects and results.period_effects[p].se > 0
+            ]
 
-                if len(estimated_pre_periods) == 0:
-                    raise ValueError(
-                        "No estimated pre-period coefficients found. "
-                        "The pre-trends test requires at least one estimated "
-                        "pre-period coefficient (excluding the reference period)."
-                    )
+            if len(estimated_pre_periods) == 0:
+                raise ValueError(
+                    "No estimated pre-period coefficients found. "
+                    "The pre-trends test requires at least one estimated "
+                    "pre-period coefficient (excluding the reference period)."
+                )
 
-                n_pre = len(estimated_pre_periods)
+            n_pre = len(estimated_pre_periods)
+            effects = np.array([results.period_effects[p].effect for p in estimated_pre_periods])
+            ses = np.array([results.period_effects[p].se for p in estimated_pre_periods])
 
-                # Extract effects for estimated periods only
-                effects = np.array([
-                    results.coefficients[f"treated:period_{p}"]
-                    for p in estimated_pre_periods
-                ])
-
-                # Extract SEs - try period_effects first, fall back to avg_se
-                ses = []
-                for p in estimated_pre_periods:
-                    if p in results.period_effects:
-                        ses.append(results.period_effects[p].se)
-                    else:
-                        ses.append(results.avg_se)
-                ses = np.array(ses)
-
-                # Extract vcov for estimated pre-periods
-                # Build mapping from period to vcov index
-                if results.vcov is not None:
-                    # Get ordered list of all coefficient keys
-                    coef_keys = list(results.coefficients.keys())
-                    pre_indices = [
-                        coef_keys.index(f"treated:period_{p}")
-                        for p in estimated_pre_periods
-                        if f"treated:period_{p}" in coef_keys
-                    ]
-                    if len(pre_indices) == n_pre and results.vcov.shape[0] > max(pre_indices):
-                        vcov = results.vcov[np.ix_(pre_indices, pre_indices)]
-                    else:
-                        # Fall back to diagonal
-                        vcov = np.diag(ses ** 2)
-                else:
-                    vcov = np.diag(ses ** 2)
+            # Extract vcov using stored interaction indices for robust extraction
+            if (
+                results.vcov is not None
+                and hasattr(results, "interaction_indices")
+                and results.interaction_indices is not None
+            ):
+                indices = [results.interaction_indices[p] for p in estimated_pre_periods]
+                vcov = results.vcov[np.ix_(indices, indices)]
             else:
-                # No coefficients available - try period_effects for pre-periods
-                # Exclude reference period (the one with effect=0 and se=0 or missing)
-                estimated_pre_periods = [
-                    p for p in all_pre_periods
-                    if p in results.period_effects
-                    and results.period_effects[p].se > 0
-                ]
-
-                if len(estimated_pre_periods) == 0:
-                    raise ValueError(
-                        "No estimated pre-period effects found. "
-                        "The pre-trends test requires at least one estimated "
-                        "pre-period effect (excluding the reference period)."
-                    )
-
-                n_pre = len(estimated_pre_periods)
-                effects = np.array([
-                    results.period_effects[p].effect
-                    for p in estimated_pre_periods
-                ])
-                ses = np.array([
-                    results.period_effects[p].se
-                    for p in estimated_pre_periods
-                ])
-                vcov = np.diag(ses ** 2)
+                vcov = np.diag(ses**2)
 
             return effects, ses, vcov, n_pre
 
         # Try CallawaySantAnnaResults
         try:
             from diff_diff.staggered import CallawaySantAnnaResults
+
             if isinstance(results, CallawaySantAnnaResults):
                 if results.event_study_effects is None:
                     raise ValueError(
@@ -658,10 +616,9 @@ class PreTrendsPower:
                 # Get pre-period effects (negative relative times)
                 # Filter out normalization constraints (n_groups=0) and non-finite SEs
                 pre_effects = {
-                    t: data for t, data in results.event_study_effects.items()
-                    if t < 0
-                    and data.get('n_groups', 1) > 0
-                    and np.isfinite(data.get('se', np.nan))
+                    t: data
+                    for t, data in results.event_study_effects.items()
+                    if t < 0 and data.get("n_groups", 1) > 0 and np.isfinite(data.get("se", np.nan))
                 }
 
                 if not pre_effects:
@@ -670,9 +627,9 @@ class PreTrendsPower:
                 pre_periods = sorted(pre_effects.keys())
                 n_pre = len(pre_periods)
 
-                effects = np.array([pre_effects[t]['effect'] for t in pre_periods])
-                ses = np.array([pre_effects[t]['se'] for t in pre_periods])
-                vcov = np.diag(ses ** 2)
+                effects = np.array([pre_effects[t]["effect"] for t in pre_periods])
+                ses = np.array([pre_effects[t]["se"] for t in pre_periods])
+                vcov = np.diag(ses**2)
 
                 return effects, ses, vcov, n_pre
         except ImportError:
@@ -681,14 +638,14 @@ class PreTrendsPower:
         # Try SunAbrahamResults
         try:
             from diff_diff.sun_abraham import SunAbrahamResults
+
             if isinstance(results, SunAbrahamResults):
                 # Get pre-period effects (negative relative times)
                 # Filter out normalization constraints (n_groups=0) and non-finite SEs
                 pre_effects = {
-                    t: data for t, data in results.event_study_effects.items()
-                    if t < 0
-                    and data.get('n_groups', 1) > 0
-                    and np.isfinite(data.get('se', np.nan))
+                    t: data
+                    for t, data in results.event_study_effects.items()
+                    if t < 0 and data.get("n_groups", 1) > 0 and np.isfinite(data.get("se", np.nan))
                 }
 
                 if not pre_effects:
@@ -697,9 +654,9 @@ class PreTrendsPower:
                 pre_periods = sorted(pre_effects.keys())
                 n_pre = len(pre_periods)
 
-                effects = np.array([pre_effects[t]['effect'] for t in pre_periods])
-                ses = np.array([pre_effects[t]['se'] for t in pre_periods])
-                vcov = np.diag(ses ** 2)
+                effects = np.array([pre_effects[t]["effect"] for t in pre_periods])
+                ses = np.array([pre_effects[t]["se"] for t in pre_periods])
+                vcov = np.diag(ses**2)
 
                 return effects, ses, vcov, n_pre
         except ImportError:
@@ -888,9 +845,7 @@ class PreTrendsPower:
             M = mdv if np.isfinite(mdv) else np.max(ses)
 
         # Compute power at specified M
-        power, noncentrality, test_stat, critical_value = self._compute_power(
-            M, weights, vcov
-        )
+        power, noncentrality, test_stat, critical_value = self._compute_power(M, weights, vcov)
 
         return PreTrendsPowerResults(
             power=power,
@@ -977,10 +932,7 @@ class PreTrendsPower:
             M_grid = np.asarray(M_grid)
 
         # Compute power at each M
-        powers = np.array([
-            self._compute_power(M, weights, vcov)[0]
-            for M in M_grid
-        ])
+        powers = np.array([self._compute_power(M, weights, vcov)[0] for M in M_grid])
 
         return PreTrendsPowerCurve(
             M_values=M_grid,
@@ -1028,32 +980,20 @@ class PreTrendsPower:
         max_pre_se = np.max(pt_results.pre_period_ses)
 
         interpretation = []
-        interpretation.append(
-            f"Minimum Detectable Violation (MDV): {mdv:.4f}"
-        )
-        interpretation.append(
-            f"Max pre-period SE: {max_pre_se:.4f}"
-        )
+        interpretation.append(f"Minimum Detectable Violation (MDV): {mdv:.4f}")
+        interpretation.append(f"Max pre-period SE: {max_pre_se:.4f}")
 
         if np.isfinite(mdv):
             # Ratio of MDV to max SE - gives sense of how many SEs the MDV is
             mdv_in_ses = mdv / max_pre_se if max_pre_se > 0 else np.inf
-            interpretation.append(
-                f"MDV / max(SE): {mdv_in_ses:.2f}"
-            )
+            interpretation.append(f"MDV / max(SE): {mdv_in_ses:.2f}")
 
             if mdv_in_ses < 1:
-                interpretation.append(
-                    "→ Pre-trends test is fairly sensitive to violations."
-                )
+                interpretation.append("→ Pre-trends test is fairly sensitive to violations.")
             elif mdv_in_ses < 2:
-                interpretation.append(
-                    "→ Pre-trends test has moderate sensitivity."
-                )
+                interpretation.append("→ Pre-trends test has moderate sensitivity.")
             else:
-                interpretation.append(
-                    "→ Pre-trends test has low power to detect violations."
-                )
+                interpretation.append("→ Pre-trends test has low power to detect violations.")
                 interpretation.append(
                     "  Consider using HonestDiD with larger M values for robustness."
                 )
@@ -1061,9 +1001,7 @@ class PreTrendsPower:
             interpretation.append(
                 "→ Pre-trends test cannot achieve target power for any violation size."
             )
-            interpretation.append(
-                "  Use HonestDiD sensitivity analysis for inference."
-            )
+            interpretation.append("  Use HonestDiD sensitivity analysis for inference.")
 
         return {
             "mdv": mdv,

@@ -106,23 +106,27 @@ class DiDResults:
             if self.n_clusters is not None:
                 lines.append(f"{'Number of clusters:':<25} {self.n_clusters:>10}")
 
-        lines.extend([
-            "",
-            "-" * 70,
-            f"{'Parameter':<15} {'Estimate':>12} {'Std. Err.':>12} {'t-stat':>10} {'P>|t|':>10} {'':>5}",
-            "-" * 70,
-            f"{'ATT':<15} {self.att:>12.4f} {self.se:>12.4f} {self.t_stat:>10.3f} {self.p_value:>10.4f} {self.significance_stars:>5}",
-            "-" * 70,
-            "",
-            f"{conf_level}% Confidence Interval: [{self.conf_int[0]:.4f}, {self.conf_int[1]:.4f}]",
-        ])
+        lines.extend(
+            [
+                "",
+                "-" * 70,
+                f"{'Parameter':<15} {'Estimate':>12} {'Std. Err.':>12} {'t-stat':>10} {'P>|t|':>10} {'':>5}",
+                "-" * 70,
+                f"{'ATT':<15} {self.att:>12.4f} {self.se:>12.4f} {self.t_stat:>10.3f} {self.p_value:>10.4f} {self.significance_stars:>5}",
+                "-" * 70,
+                "",
+                f"{conf_level}% Confidence Interval: [{self.conf_int[0]:.4f}, {self.conf_int[1]:.4f}]",
+            ]
+        )
 
         # Add significance codes
-        lines.extend([
-            "",
-            "Signif. codes: '***' 0.001, '**' 0.01, '*' 0.05, '.' 0.1",
-            "=" * 70,
-        ])
+        lines.extend(
+            [
+                "",
+                "Signif. codes: '***' 0.001, '**' 0.01, '*' 0.05, '.' 0.1",
+                "=" * 70,
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -187,6 +191,7 @@ def _get_significance_stars(p_value: float) -> str:
     rank-deficient matrices).
     """
     import numpy as np
+
     if np.isnan(p_value):
         return ""
     if p_value < 0.001:
@@ -259,8 +264,10 @@ class MultiPeriodDiDResults:
     ----------
     period_effects : dict[any, PeriodEffect]
         Dictionary mapping period identifiers to their PeriodEffect objects.
+        Contains all estimated period effects (pre and post, excluding
+        the reference period which is normalized to zero).
     avg_att : float
-        Average Treatment effect on the Treated across all post-periods.
+        Average Treatment effect on the Treated across post-periods only.
     avg_se : float
         Standard error of the average ATT.
     avg_t_stat : float
@@ -279,6 +286,13 @@ class MultiPeriodDiDResults:
         List of pre-treatment period identifiers.
     post_periods : list
         List of post-treatment period identifiers.
+    reference_period : any, optional
+        The reference (omitted) period. Its coefficient is zero by
+        construction and it is excluded from ``period_effects``.
+    interaction_indices : dict, optional
+        Mapping from period identifier to column index in the full
+        variance-covariance matrix. Used internally for sub-VCV
+        extraction (e.g., by HonestDiD and PreTrendsPower).
     """
 
     period_effects: Dict[Any, PeriodEffect]
@@ -298,6 +312,8 @@ class MultiPeriodDiDResults:
     residuals: Optional[np.ndarray] = field(default=None)
     fitted_values: Optional[np.ndarray] = field(default=None)
     r_squared: Optional[float] = field(default=None)
+    reference_period: Optional[Any] = field(default=None)
+    interaction_indices: Optional[Dict[Any, int]] = field(default=None, repr=False)
 
     def __repr__(self) -> str:
         """Concise string representation."""
@@ -307,6 +323,16 @@ class MultiPeriodDiDResults:
             f"SE={self.avg_se:.4f}, "
             f"n_post_periods={len(self.post_periods)})"
         )
+
+    @property
+    def pre_period_effects(self) -> Dict[Any, PeriodEffect]:
+        """Pre-period effects only (for parallel trends assessment)."""
+        return {p: pe for p, pe in self.period_effects.items() if p in self.pre_periods}
+
+    @property
+    def post_period_effects(self) -> Dict[Any, PeriodEffect]:
+        """Post-period effects only."""
+        return {p: pe for p, pe in self.period_effects.items() if p in self.post_periods}
 
     def summary(self, alpha: Optional[float] = None) -> str:
         """
@@ -341,15 +367,49 @@ class MultiPeriodDiDResults:
         if self.r_squared is not None:
             lines.append(f"{'R-squared:':<25} {self.r_squared:>10.4f}")
 
-        # Period-specific effects
-        lines.extend([
-            "",
-            "-" * 80,
-            "Period-Specific Treatment Effects".center(80),
-            "-" * 80,
-            f"{'Period':<15} {'Estimate':>12} {'Std. Err.':>12} {'t-stat':>10} {'P>|t|':>10} {'Sig.':>6}",
-            "-" * 80,
-        ])
+        # Pre-period effects (parallel trends test)
+        pre_effects = {p: pe for p, pe in self.period_effects.items() if p in self.pre_periods}
+        if pre_effects:
+            lines.extend(
+                [
+                    "",
+                    "-" * 80,
+                    "Pre-Period Effects (Parallel Trends Test)".center(80),
+                    "-" * 80,
+                    f"{'Period':<15} {'Estimate':>12} {'Std. Err.':>12} {'t-stat':>10} {'P>|t|':>10} {'Sig.':>6}",
+                    "-" * 80,
+                ]
+            )
+
+            for period in self.pre_periods:
+                if period in self.period_effects:
+                    pe = self.period_effects[period]
+                    stars = pe.significance_stars
+                    lines.append(
+                        f"{str(period):<15} {pe.effect:>12.4f} {pe.se:>12.4f} "
+                        f"{pe.t_stat:>10.3f} {pe.p_value:>10.4f} {stars:>6}"
+                    )
+
+            # Show reference period
+            if self.reference_period is not None:
+                lines.append(
+                    f"[ref: {self.reference_period}]"
+                    f"{'0.0000':>21} {'---':>12} {'---':>10} {'---':>10} {'':>6}"
+                )
+
+            lines.append("-" * 80)
+
+        # Post-period treatment effects
+        lines.extend(
+            [
+                "",
+                "-" * 80,
+                "Post-Period Treatment Effects".center(80),
+                "-" * 80,
+                f"{'Period':<15} {'Estimate':>12} {'Std. Err.':>12} {'t-stat':>10} {'P>|t|':>10} {'Sig.':>6}",
+                "-" * 80,
+            ]
+        )
 
         for period in self.post_periods:
             pe = self.period_effects[period]
@@ -360,27 +420,31 @@ class MultiPeriodDiDResults:
             )
 
         # Average effect
-        lines.extend([
-            "-" * 80,
-            "",
-            "-" * 80,
-            "Average Treatment Effect (across post-periods)".center(80),
-            "-" * 80,
-            f"{'Parameter':<15} {'Estimate':>12} {'Std. Err.':>12} {'t-stat':>10} {'P>|t|':>10} {'Sig.':>6}",
-            "-" * 80,
-            f"{'Avg ATT':<15} {self.avg_att:>12.4f} {self.avg_se:>12.4f} "
-            f"{self.avg_t_stat:>10.3f} {self.avg_p_value:>10.4f} {self.significance_stars:>6}",
-            "-" * 80,
-            "",
-            f"{conf_level}% Confidence Interval: [{self.avg_conf_int[0]:.4f}, {self.avg_conf_int[1]:.4f}]",
-        ])
+        lines.extend(
+            [
+                "-" * 80,
+                "",
+                "-" * 80,
+                "Average Treatment Effect (across post-periods)".center(80),
+                "-" * 80,
+                f"{'Parameter':<15} {'Estimate':>12} {'Std. Err.':>12} {'t-stat':>10} {'P>|t|':>10} {'Sig.':>6}",
+                "-" * 80,
+                f"{'Avg ATT':<15} {self.avg_att:>12.4f} {self.avg_se:>12.4f} "
+                f"{self.avg_t_stat:>10.3f} {self.avg_p_value:>10.4f} {self.significance_stars:>6}",
+                "-" * 80,
+                "",
+                f"{conf_level}% Confidence Interval: [{self.avg_conf_int[0]:.4f}, {self.avg_conf_int[1]:.4f}]",
+            ]
+        )
 
         # Add significance codes
-        lines.extend([
-            "",
-            "Signif. codes: '***' 0.001, '**' 0.01, '*' 0.05, '.' 0.1",
-            "=" * 80,
-        ])
+        lines.extend(
+            [
+                "",
+                "Signif. codes: '***' 0.001, '**' 0.01, '*' 0.05, '.' 0.1",
+                "=" * 80,
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -408,9 +472,15 @@ class MultiPeriodDiDResults:
             If the period is not found in post-treatment periods.
         """
         if period not in self.period_effects:
+            if hasattr(self, "reference_period") and period == self.reference_period:
+                raise KeyError(
+                    f"Period '{period}' is the reference period (coefficient "
+                    f"normalized to zero by construction). Its effect is 0.0 with "
+                    f"no associated uncertainty."
+                )
             raise KeyError(
                 f"Period '{period}' not found. "
-                f"Available post-periods: {list(self.period_effects.keys())}"
+                f"Available periods: {list(self.period_effects.keys())}"
             )
         return self.period_effects[period]
 
@@ -436,6 +506,7 @@ class MultiPeriodDiDResults:
             "n_pre_periods": len(self.pre_periods),
             "n_post_periods": len(self.post_periods),
             "r_squared": self.r_squared,
+            "reference_period": self.reference_period,
         }
 
         # Add period-specific effects
@@ -453,20 +524,23 @@ class MultiPeriodDiDResults:
         Returns
         -------
         pd.DataFrame
-            DataFrame with one row per post-treatment period.
+            DataFrame with one row per estimated period (pre and post).
         """
         rows = []
         for period, pe in self.period_effects.items():
-            rows.append({
-                "period": period,
-                "effect": pe.effect,
-                "se": pe.se,
-                "t_stat": pe.t_stat,
-                "p_value": pe.p_value,
-                "conf_int_lower": pe.conf_int[0],
-                "conf_int_upper": pe.conf_int[1],
-                "is_significant": pe.is_significant,
-            })
+            rows.append(
+                {
+                    "period": period,
+                    "effect": pe.effect,
+                    "se": pe.se,
+                    "t_stat": pe.t_stat,
+                    "p_value": pe.p_value,
+                    "conf_int_lower": pe.conf_int[0],
+                    "conf_int_upper": pe.conf_int[1],
+                    "is_significant": pe.is_significant,
+                    "is_post": period in self.post_periods,
+                }
+            )
         return pd.DataFrame(rows)
 
     @property
@@ -587,29 +661,31 @@ class SyntheticDiDResults:
         if self.variance_method == "bootstrap" and self.n_bootstrap is not None:
             lines.append(f"{'Bootstrap replications:':<25} {self.n_bootstrap:>10}")
 
-        lines.extend([
-            "",
-            "-" * 75,
-            f"{'Parameter':<15} {'Estimate':>12} {'Std. Err.':>12} {'t-stat':>10} {'P>|t|':>10} {'':>5}",
-            "-" * 75,
-            f"{'ATT':<15} {self.att:>12.4f} {self.se:>12.4f} {self.t_stat:>10.3f} {self.p_value:>10.4f} {self.significance_stars:>5}",
-            "-" * 75,
-            "",
-            f"{conf_level}% Confidence Interval: [{self.conf_int[0]:.4f}, {self.conf_int[1]:.4f}]",
-        ])
+        lines.extend(
+            [
+                "",
+                "-" * 75,
+                f"{'Parameter':<15} {'Estimate':>12} {'Std. Err.':>12} {'t-stat':>10} {'P>|t|':>10} {'':>5}",
+                "-" * 75,
+                f"{'ATT':<15} {self.att:>12.4f} {self.se:>12.4f} {self.t_stat:>10.3f} {self.p_value:>10.4f} {self.significance_stars:>5}",
+                "-" * 75,
+                "",
+                f"{conf_level}% Confidence Interval: [{self.conf_int[0]:.4f}, {self.conf_int[1]:.4f}]",
+            ]
+        )
 
         # Show top unit weights
         if self.unit_weights:
-            sorted_weights = sorted(
-                self.unit_weights.items(), key=lambda x: x[1], reverse=True
-            )
+            sorted_weights = sorted(self.unit_weights.items(), key=lambda x: x[1], reverse=True)
             top_n = min(5, len(sorted_weights))
-            lines.extend([
-                "",
-                "-" * 75,
-                "Top Unit Weights (Synthetic Control)".center(75),
-                "-" * 75,
-            ])
+            lines.extend(
+                [
+                    "",
+                    "-" * 75,
+                    "Top Unit Weights (Synthetic Control)".center(75),
+                    "-" * 75,
+                ]
+            )
             for unit, weight in sorted_weights[:top_n]:
                 if weight > 0.001:  # Only show meaningful weights
                     lines.append(f"  Unit {unit}: {weight:.4f}")
@@ -619,11 +695,13 @@ class SyntheticDiDResults:
             lines.append(f"  ({n_nonzero} units with weight > 0.001)")
 
         # Add significance codes
-        lines.extend([
-            "",
-            "Signif. codes: '***' 0.001, '**' 0.01, '*' 0.05, '.' 0.1",
-            "=" * 75,
-        ])
+        lines.extend(
+            [
+                "",
+                "Signif. codes: '***' 0.001, '**' 0.01, '*' 0.05, '.' 0.1",
+                "=" * 75,
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -680,10 +758,9 @@ class SyntheticDiDResults:
         pd.DataFrame
             DataFrame with unit IDs and their weights.
         """
-        return pd.DataFrame([
-            {"unit": unit, "weight": weight}
-            for unit, weight in self.unit_weights.items()
-        ]).sort_values("weight", ascending=False)
+        return pd.DataFrame(
+            [{"unit": unit, "weight": weight} for unit, weight in self.unit_weights.items()]
+        ).sort_values("weight", ascending=False)
 
     def get_time_weights_df(self) -> pd.DataFrame:
         """
@@ -694,10 +771,9 @@ class SyntheticDiDResults:
         pd.DataFrame
             DataFrame with time periods and their weights.
         """
-        return pd.DataFrame([
-            {"period": period, "weight": weight}
-            for period, weight in self.time_weights.items()
-        ])
+        return pd.DataFrame(
+            [{"period": period, "weight": weight} for period, weight in self.time_weights.items()]
+        )
 
     @property
     def is_significant(self) -> bool:

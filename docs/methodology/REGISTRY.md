@@ -81,41 +81,115 @@ where τ is the ATT.
 ## MultiPeriodDiD
 
 **Primary source:** Event study methodology
-- Freyaldenhoven, S., Hansen, C., Pérez, J.P., & Shapiro, J.M. (2021). Visualization, identification, and estimation in the linear panel event-study design. NBER Working Paper 29170.
+- Freyaldenhoven, S., Hansen, C., Pérez, J.P., & Shapiro, J.M. (2021). Visualization,
+  identification, and estimation in the linear panel event-study design. NBER Working Paper 29170.
+- Wooldridge, J.M. (2010). *Econometric Analysis of Cross Section and Panel Data*, 2nd ed.
+  MIT Press, Ch. 10, 13.
+- Angrist, J.D., & Pischke, J.-S. (2009). *Mostly Harmless Econometrics*. Princeton University Press.
+
+**Scope:** Simultaneous adoption event study. All treated units receive treatment at the
+same time. For staggered adoption (different units treated at different times), use
+CallawaySantAnna or SunAbraham instead.
 
 **Key implementation requirements:**
 
 *Assumption checks / warnings:*
-- Requires multiple pre and post periods
-- Reference period (typically t=-1) must be specified or defaulted
-- Warns if treatment timing varies across units (suggests staggered estimator)
+- Treatment indicator must be binary (0/1) with variation in both groups
+- Requires at least 1 pre-treatment and 1 post-treatment period
+- Warns when only 1 pre-period available (≥2 needed to test parallel trends;
+  ATT is still valid but pre-trends assessment is not possible)
+- Reference period defaults to last pre-treatment period (e=-1 convention)
+- Treatment indicator should be time-invariant ever-treated (D_i);
+  warns when time-varying D_it detected (requires `unit` parameter)
+- Warns if treatment timing varies across units when `unit` is provided
+  (suggests CallawaySantAnna or SunAbraham instead)
+- Treatment must be an absorbing state (once treated, always treated)
 
-*Estimator equation (as implemented):*
+*Estimator equation (target specification):*
+
+With unit and time fixed effects absorbed:
+
 ```
-Y_it = α_i + γ_t + Σ_{e≠-1} δ_e × 1(t - E_i = e) + X'β + ε_it
+Y_it = α_i + γ_t + Σ_{e≠-1} δ_e × D_i × 1(t = E + e) + X'β + ε_it
 ```
-where E_i is treatment time for unit i, and δ_e are event-study coefficients.
+
+where:
+- α_i = unit fixed effects (absorbed)
+- γ_t = time fixed effects (absorbed)
+- E = common treatment time (same for all treated units)
+- D_i = treatment group indicator (1=treated, 0=control)
+- e = t - E = event time (relative periods to treatment)
+- δ_e = treatment effect at event time e
+- δ_{-1} = 0 (reference period, omitted for identification)
+
+For simultaneous treatment, this is equivalent to interacting treatment with
+calendar-time indicators:
+
+```
+Y_it = α_i + γ_t + Σ_{t≠t_ref} δ_t × (D_i × Period_t) + X'β + ε_it
+```
+
+where interactions are included for ALL periods (pre and post), not just post-treatment.
+
+Pre-treatment coefficients (e < -1) test the parallel trends assumption:
+under H0 of parallel trends, δ_e = 0 for all e < 0.
+
+Post-treatment coefficients (e ≥ 0) estimate dynamic treatment effects.
+
+Average ATT over post-treatment periods:
+
+```
+ATT_avg = (1/|post|) × Σ_{e≥0} δ_e
+```
+
+with SE computed from the sub-VCV matrix:
+
+```
+Var(ATT_avg) = 1'V1 / |post|²
+```
+
+where V is the VCV sub-matrix for post-treatment δ_e coefficients.
 
 *Standard errors:*
-- Default: Cluster-robust at unit level
-- Event-study coefficients use appropriate degrees of freedom
+- Default: HC1 heteroskedasticity-robust (same as DifferenceInDifferences base class)
+- Alternative: Cluster-robust at unit level via `cluster` parameter (recommended for panel data)
+- Optional: Wild cluster bootstrap (complex for multi-coefficient testing;
+  requires joint bootstrap distribution)
+- Degrees of freedom adjusted for absorbed fixed effects
 
 *Edge cases:*
-- Unbalanced panels: only uses observations where event-time is defined
-- Never-treated units: event-time indicators are all zero
-- Endpoint binning: distant event times can be binned
-- Rank-deficient design matrix (collinearity): warns and sets NA for dropped coefficients (R-style, matches `lm()`)
-- Average ATT (`avg_att`) is NA if any post-period effect is unidentified (R-style NA propagation)
+- Reference period: omitted from design matrix; coefficient is zero by construction.
+  Default is last pre-treatment period (e=-1). User can override via `reference_period`.
+- Never-treated units: all event-time indicators are zero; they identify the time
+  fixed effects and serve as comparison group.
+- Endpoint binning: distant event times (e.g., e < -K or e > K) should be binned
+  into endpoint indicators to avoid sparse cells. This prevents imprecise estimates
+  at extreme leads/lags.
+- Unbalanced panels: only uses observations where event-time is defined. Units
+  not observed at all event times contribute to the periods they are present for.
+- Rank-deficient design matrix (collinearity): warns and sets NA for dropped
+  coefficients (R-style, matches `lm()`)
+- Average ATT (`avg_att`) is NA if any post-period effect is unidentified
+  (R-style NA propagation)
+- Pre-test of parallel trends: joint F-test on pre-treatment δ_e coefficients.
+  Low power in pre-test does not validate parallel trends (Roth 2022).
 
 **Reference implementation(s):**
-- R: `fixest::feols()` with `i(event_time, ref=-1)`
-- Stata: `eventdd` or manual indicator regression
+- R: `fixest::feols(y ~ i(time, treatment, ref=ref_period) | unit + time, data, cluster=~unit)`
+  or equivalently `feols(y ~ i(event_time, ref=-1) | unit + time, data, cluster=~unit)`
+- Stata: `reghdfe y ib(-1).event_time#1.treatment, absorb(unit time) cluster(unit)`
 
 **Requirements checklist:**
-- [ ] Reference period coefficient is zero (normalized)
-- [ ] Pre-period coefficients test parallel trends assumption
-- [ ] Supports both balanced and unbalanced panels
-- [ ] Returns PeriodEffect objects with confidence intervals
+
+- [x] Event-time indicators for ALL periods (pre and post), not just post-treatment
+- [x] Reference period coefficient is zero (normalized by omission from design matrix)
+- [x] Pre-period coefficients available for parallel trends assessment
+- [ ] Default cluster-robust SE at unit level (currently HC1; cluster-robust via `cluster` param)
+- [ ] Supports unit and time FE via absorption
+- [ ] Endpoint binning for distant event times
+- [x] Average ATT correctly accounts for covariance between period effects
+- [x] Returns PeriodEffect objects with confidence intervals
+- [x] Supports both balanced and unbalanced panels
 
 ---
 
@@ -964,7 +1038,7 @@ should be a deliberate user choice.
 | Estimator | Default SE | Alternatives |
 |-----------|-----------|--------------|
 | DifferenceInDifferences | HC1 robust | Cluster-robust, wild bootstrap |
-| MultiPeriodDiD | Cluster at unit | Wild bootstrap |
+| MultiPeriodDiD | HC1 robust | Cluster-robust (via `cluster` param), wild bootstrap |
 | TwoWayFixedEffects | Cluster at unit | Wild bootstrap |
 | CallawaySantAnna | Analytical (influence fn) | Multiplier bootstrap |
 | SunAbraham | Cluster-robust + delta method | Pairs bootstrap |
@@ -983,7 +1057,7 @@ should be a deliberate user choice.
 | diff-diff Estimator | R Package | Function |
 |---------------------|-----------|----------|
 | DifferenceInDifferences | fixest | `feols(y ~ treat:post, ...)` |
-| MultiPeriodDiD | fixest | `feols(y ~ i(event_time), ...)` |
+| MultiPeriodDiD | fixest | `feols(y ~ i(time, treat, ref=ref) \| unit + time)` |
 | TwoWayFixedEffects | fixest | `feols(y ~ treat \| unit + time, ...)` |
 | CallawaySantAnna | did | `att_gt()` |
 | SunAbraham | fixest | `sunab()` |

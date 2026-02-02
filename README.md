@@ -561,12 +561,13 @@ results = twfe.fit(
 
 ### Multi-Period DiD (Event Study)
 
-For settings with multiple pre- and post-treatment periods:
+For settings with multiple pre- and post-treatment periods. Estimates treatment × period
+interactions for ALL periods (pre and post), enabling parallel trends assessment:
 
 ```python
 from diff_diff import MultiPeriodDiD
 
-# Fit with multiple time periods
+# Fit full event study with pre and post period effects
 did = MultiPeriodDiD()
 results = did.fit(
     panel_data,
@@ -574,18 +575,23 @@ results = did.fit(
     treatment='treated',
     time='period',
     post_periods=[3, 4, 5],      # Periods 3-5 are post-treatment
-    reference_period=0           # Reference period for comparison
+    reference_period=2,          # Last pre-period (e=-1 convention)
+    unit='unit_id',              # Optional: warns if staggered adoption detected
 )
 
-# View period-specific treatment effects
-for period, effect in results.period_effects.items():
-    print(f"Period {period}: {effect.effect:.3f} (SE: {effect.se:.3f})")
+# Pre-period effects test parallel trends (should be ≈ 0)
+for period, effect in results.pre_period_effects.items():
+    print(f"Pre {period}: {effect.effect:.3f} (SE: {effect.se:.3f})")
+
+# Post-period effects estimate dynamic treatment effects
+for period, effect in results.post_period_effects.items():
+    print(f"Post {period}: {effect.effect:.3f} (SE: {effect.se:.3f})")
 
 # View average treatment effect across post-periods
 print(f"Average ATT: {results.avg_att:.3f}")
 print(f"Average SE: {results.avg_se:.3f}")
 
-# Full summary with all period effects
+# Full summary with pre and post period effects
 results.print_summary()
 ```
 
@@ -951,10 +957,10 @@ Create publication-ready event study plots:
 ```python
 from diff_diff import plot_event_study, MultiPeriodDiD, CallawaySantAnna, SunAbraham
 
-# From MultiPeriodDiD
+# From MultiPeriodDiD (full event study with pre and post period effects)
 did = MultiPeriodDiD()
 results = did.fit(data, outcome='y', treatment='treated',
-                  time='period', post_periods=[3, 4, 5])
+                  time='period', post_periods=[3, 4, 5], reference_period=2)
 plot_event_study(results, title="Treatment Effects Over Time")
 
 # From CallawaySantAnna (with event study aggregation)
@@ -1413,14 +1419,15 @@ Pre-trends tests have low power and can exacerbate bias. **Honest DiD** (Rambach
 ```python
 from diff_diff import HonestDiD, MultiPeriodDiD
 
-# First, fit a standard event study
+# First, fit a full event study (pre + post period effects)
 did = MultiPeriodDiD()
 event_results = did.fit(
     data,
     outcome='outcome',
     treatment='treated',
     time='period',
-    post_periods=[5, 6, 7, 8, 9]
+    post_periods=[5, 6, 7, 8, 9],
+    reference_period=4,          # Last pre-period (e=-1 convention)
 )
 
 # Compute honest bounds with relative magnitudes restriction
@@ -1488,14 +1495,15 @@ A passing pre-trends test doesn't mean parallel trends holds—it may just mean 
 ```python
 from diff_diff import PreTrendsPower, MultiPeriodDiD
 
-# First, fit an event study
+# First, fit a full event study
 did = MultiPeriodDiD()
 event_results = did.fit(
     data,
     outcome='outcome',
     treatment='treated',
     time='period',
-    post_periods=[5, 6, 7, 8, 9]
+    post_periods=[5, 6, 7, 8, 9],
+    reference_period=4,
 )
 
 # Analyze pre-trends test power
@@ -1764,7 +1772,8 @@ MultiPeriodDiD(
 | `covariates` | list | Linear control variables |
 | `fixed_effects` | list | Categorical FE columns (creates dummies) |
 | `absorb` | list | High-dimensional FE (within-transformation) |
-| `reference_period` | any | Omitted period for time dummies |
+| `reference_period` | any | Omitted period (default: last pre-period, e=-1 convention) |
+| `unit` | str | Unit identifier column (for staggered adoption warning) |
 
 ### MultiPeriodDiDResults
 
@@ -1772,8 +1781,8 @@ MultiPeriodDiD(
 
 | Attribute | Description |
 |-----------|-------------|
-| `period_effects` | Dict mapping periods to PeriodEffect objects |
-| `avg_att` | Average ATT across post-treatment periods |
+| `period_effects` | Dict mapping periods to PeriodEffect objects (pre and post, excluding reference) |
+| `avg_att` | Average ATT across post-treatment periods only |
 | `avg_se` | Standard error of average ATT |
 | `avg_t_stat` | T-statistic for average ATT |
 | `avg_p_value` | P-value for average ATT |
@@ -1781,6 +1790,10 @@ MultiPeriodDiD(
 | `n_obs` | Number of observations |
 | `pre_periods` | List of pre-treatment periods |
 | `post_periods` | List of post-treatment periods |
+| `reference_period` | The omitted reference period (coefficient = 0 by construction) |
+| `interaction_indices` | Dict mapping period → column index in VCV (for sub-VCV extraction) |
+| `pre_period_effects` | Property: pre-period effects only (for parallel trends assessment) |
+| `post_period_effects` | Property: post-period effects only |
 
 **Methods:**
 
