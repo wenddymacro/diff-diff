@@ -198,11 +198,11 @@ When the working tree is clean but commits are ahead, scan for secrets in the co
 
 If `--no-review` flag was NOT provided:
 
-1. **Get base repository from PR**:
+1. **Get repository owner and name**:
    ```bash
-   gh pr view --json baseRepository --jq '.baseRepository.owner.login + "/" + .baseRepository.name'
+   gh repo view --json owner,name --jq '.owner.login + "/" + .name'
    ```
-   Store as `<owner>/<repo>` (this is the upstream repo, correct for fork workflows).
+   Store as `<owner>/<repo>` (resolves to the current repo context, correct for fork workflows).
    Parse to extract `<owner>` and `<repo>`.
 
 2. **Add review comment using MCP tool**:
