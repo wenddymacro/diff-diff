@@ -17,7 +17,7 @@ Read PR review feedback from a GitHub comment URL, analyze the feedback, and ent
 
 ## Constraints
 
-Steps 1-7 are **read-only** -- only fetching data from GitHub, reading local files, and analyzing content. No file modifications occur until the user approves the plan generated in plan mode (Step 8).
+Steps 1-7 are **read-only** -- only fetching data from GitHub, reading local files, and analyzing content. No file modifications occur until the user approves the plan generated in plan mode (Step 8). The one exception is Step 4, which may switch branches (with user confirmation) to ensure subsequent reads target the correct code.
 
 ## Instructions
 
@@ -33,7 +33,7 @@ Supported formats:
 3. Full PR review: https://github.com/owner/repo/pull/42#pullrequestreview-345678
 ```
 
-Strip any query parameters from the URL before parsing: remove the query string (the `?...` portion) while preserving the `#` fragment. For example, `https://github.com/o/r/pull/1?notification_referrer_id=abc#issuecomment-123` becomes `https://github.com/o/r/pull/1#issuecomment-123`. If the URL has `?` after `#`, no stripping is needed (the `?` is part of the fragment). Then parse the URL path and fragment:
+Strip any query parameters from the URL before parsing: remove the query string (the `?...` portion) while preserving the `#` fragment. For example, `https://github.com/o/r/pull/1?notification_referrer_id=abc#issuecomment-123` becomes `https://github.com/o/r/pull/1#issuecomment-123`. If the URL has `?` after `#`, no stripping is needed (the `?` is part of the fragment). However, if the fragment itself contains `?` (e.g., `#discussion_r123?foo=bar`), strip the `?` and everything after it from the fragment before pattern matching, since GitHub fragments never contain `?` as meaningful data. Then parse the URL path and fragment:
 
 **URL path pattern**: `https://github.com/{owner}/{repo}/pull/{pr_number}[/...]#{fragment}`
 
