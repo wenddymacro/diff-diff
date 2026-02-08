@@ -70,7 +70,7 @@ Signif. codes: '***' 0.001, '**' 0.01, '*' 0.05, '.' 0.1
 - **Wild cluster bootstrap**: Valid inference with few clusters (<50) using Rademacher, Webb, or Mammen weights
 - **Panel data support**: Two-way fixed effects estimator for panel designs
 - **Multi-period analysis**: Event-study style DiD with period-specific treatment effects
-- **Staggered adoption**: Callaway-Sant'Anna (2021) and Sun-Abraham (2021) estimators for heterogeneous treatment timing
+- **Staggered adoption**: Callaway-Sant'Anna (2021), Sun-Abraham (2021), and Borusyak-Jaravel-Spiess (2024) imputation estimators for heterogeneous treatment timing
 - **Triple Difference (DDD)**: Ortiz-Villavicencio & Sant'Anna (2025) estimators with proper covariate handling
 - **Synthetic DiD**: Combined DiD with synthetic control for improved robustness
 - **Triply Robust Panel (TROP)**: Factor-adjusted DiD with synthetic weights (Athey et al. 2025)
@@ -878,6 +878,54 @@ print(f"Sun-Abraham ATT: {sa_results.overall_att:.3f}")
 
 # If results differ substantially, investigate heterogeneity
 ```
+
+### Borusyak-Jaravel-Spiess Imputation Estimator
+
+The Borusyak et al. (2024) imputation estimator is the **efficient** estimator for staggered DiD under parallel trends, producing ~50% shorter confidence intervals than Callaway-Sant'Anna and 2-3.5x shorter than Sun-Abraham under homogeneous treatment effects.
+
+```python
+from diff_diff import ImputationDiD, imputation_did
+
+# Basic usage
+est = ImputationDiD()
+results = est.fit(data, outcome='outcome', unit='unit',
+                  time='period', first_treat='first_treat')
+results.print_summary()
+
+# Event study
+results = est.fit(data, outcome='outcome', unit='unit',
+                  time='period', first_treat='first_treat',
+                  aggregate='event_study')
+
+# Pre-trend test (Equation 9)
+pt = results.pretrend_test(n_leads=3)
+print(f"F-stat: {pt['f_stat']:.3f}, p-value: {pt['p_value']:.4f}")
+
+# Convenience function
+results = imputation_did(data, 'outcome', 'unit', 'period', 'first_treat',
+                         aggregate='all')
+```
+
+```python
+ImputationDiD(
+    anticipation=0,         # Number of anticipation periods
+    alpha=0.05,             # Significance level
+    cluster=None,           # Cluster variable (defaults to unit)
+    n_bootstrap=0,          # Bootstrap iterations (0=analytical inference)
+    seed=None,              # Random seed
+    horizon_max=None,       # Max event-study horizon
+    aux_partition="cohort_horizon",  # Variance partition: "cohort_horizon", "cohort", "horizon"
+)
+```
+
+**When to use Imputation DiD vs Callaway-Sant'Anna:**
+
+| Aspect | Imputation DiD | Callaway-Sant'Anna |
+|--------|---------------|-------------------|
+| Efficiency | Most efficient under homogeneous effects | Less efficient but more robust to heterogeneity |
+| Control group | Always uses all untreated obs | Choice of never-treated or not-yet-treated |
+| Inference | Conservative variance (Theorem 3) | Multiplier bootstrap |
+| Pre-trends | Built-in F-test (Equation 9) | Separate testing |
 
 ### Triple Difference (DDD)
 
@@ -2000,6 +2048,60 @@ SunAbraham(
 | `print_summary(alpha)` | Print summary to stdout |
 | `to_dataframe(level)` | Convert to DataFrame ('event_study' or 'cohort') |
 
+### ImputationDiD
+
+```python
+ImputationDiD(
+    anticipation=0,                   # Periods of anticipation effects
+    alpha=0.05,                       # Significance level for CIs
+    cluster=None,                     # Column for cluster-robust SEs
+    n_bootstrap=0,                    # Bootstrap iterations (0 = analytical)
+    seed=None,                        # Random seed
+    rank_deficient_action='warn',     # 'warn', 'error', or 'silent'
+    horizon_max=None,                 # Max event-study horizon
+    aux_partition='cohort_horizon',   # Variance partition
+)
+```
+
+**fit() Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `data` | DataFrame | Panel data |
+| `outcome` | str | Outcome variable column name |
+| `unit` | str | Unit identifier column |
+| `time` | str | Time period column |
+| `first_treat` | str | First treatment period column (0 for never-treated) |
+| `covariates` | list | Covariate column names |
+| `aggregate` | str | Aggregation: None, "event_study", "group", "all" |
+| `balance_e` | int | Balance event study to this many pre-treatment periods |
+
+### ImputationDiDResults
+
+**Attributes:**
+
+| Attribute | Description |
+|-----------|-------------|
+| `overall_att` | Overall average treatment effect on the treated |
+| `overall_se` | Standard error (conservative, Theorem 3) |
+| `overall_t_stat` | T-statistic |
+| `overall_p_value` | P-value for H0: ATT = 0 |
+| `overall_conf_int` | Confidence interval |
+| `event_study_effects` | Dict of relative time -> effect dict (if `aggregate='event_study'` or `'all'`) |
+| `group_effects` | Dict of cohort -> effect dict (if `aggregate='group'` or `'all'`) |
+| `treatment_effects` | DataFrame of unit-level imputed treatment effects |
+| `n_treated_obs` | Number of treated observations |
+| `n_untreated_obs` | Number of untreated observations |
+
+**Methods:**
+
+| Method | Description |
+|--------|-------------|
+| `summary(alpha)` | Get formatted summary string |
+| `print_summary(alpha)` | Print summary to stdout |
+| `to_dataframe(level)` | Convert to DataFrame ('observation', 'event_study', 'group') |
+| `pretrend_test(n_leads)` | Run pre-trend F-test (Equation 9) |
+
 ### TripleDifference
 
 ```python
@@ -2463,6 +2565,14 @@ The `HonestDiD` module implements sensitivity analysis methods for relaxing the 
   Discusses functional form sensitivity in parallel trends assumptions, relevant to understanding when smoothness restrictions are appropriate.
 
 ### Multi-Period and Staggered Adoption
+
+- **Borusyak, K., Jaravel, X., & Spiess, J. (2024).** "Revisiting Event-Study Designs: Robust and Efficient Estimation." *Review of Economic Studies*, 91(6), 3253-3285. [https://doi.org/10.1093/restud/rdae007](https://doi.org/10.1093/restud/rdae007)
+
+  This paper introduces the imputation estimator implemented in our `ImputationDiD` class:
+  - **Efficient imputation**: OLS on untreated observations → impute counterfactuals → aggregate
+  - **Conservative variance**: Theorem 3 clustered variance estimator with auxiliary model
+  - **Pre-trend test**: Independent of treatment effect estimation (Proposition 9)
+  - **Efficiency gains**: ~50% shorter CIs than Callaway-Sant'Anna under homogeneous effects
 
 - **Callaway, B., & Sant'Anna, P. H. C. (2021).** "Difference-in-Differences with Multiple Time Periods." *Journal of Econometrics*, 225(2), 200-230. [https://doi.org/10.1016/j.jeconom.2020.12.001](https://doi.org/10.1016/j.jeconom.2020.12.001)
 

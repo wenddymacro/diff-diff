@@ -95,6 +95,12 @@ from diff_diff.staggered import (
     CSBootstrapResults,
     GroupTimeEffect,
 )
+from diff_diff.imputation import (
+    ImputationBootstrapResults,
+    ImputationDiD,
+    ImputationDiDResults,
+    imputation_did,
+)
 from diff_diff.sun_abraham import (
     SABootstrapResults,
     SunAbraham,
@@ -145,6 +151,7 @@ __all__ = [
     "SyntheticDiD",
     "CallawaySantAnna",
     "SunAbraham",
+    "ImputationDiD",
     "TripleDifference",
     "TROP",
     # Bacon Decomposition
@@ -163,6 +170,9 @@ __all__ = [
     "GroupTimeEffect",
     "SunAbrahamResults",
     "SABootstrapResults",
+    "ImputationDiDResults",
+    "ImputationBootstrapResults",
+    "imputation_did",
     "TripleDifferenceResults",
     "triple_difference",
     "TROPResults",

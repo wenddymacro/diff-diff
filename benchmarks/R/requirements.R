@@ -7,6 +7,7 @@
 required_packages <- c(
   # Core DiD packages
   "did",           # Callaway-Sant'Anna (2021) staggered DiD
+  "didimputation", # Borusyak, Jaravel & Spiess (2024) imputation DiD
   "HonestDiD",     # Rambachan & Roth (2023) sensitivity analysis
   "fixest",        # Fast TWFE and basic DiD
 

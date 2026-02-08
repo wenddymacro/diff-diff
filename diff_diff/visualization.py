@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from diff_diff.pretrends import PreTrendsPowerCurve, PreTrendsPowerResults
     from diff_diff.results import MultiPeriodDiDResults
     from diff_diff.staggered import CallawaySantAnnaResults
+    from diff_diff.imputation import ImputationDiDResults
     from diff_diff.sun_abraham import SunAbrahamResults
 
 # Type alias for results that can be plotted
@@ -23,6 +24,7 @@ PlottableResults = Union[
     "MultiPeriodDiDResults",
     "CallawaySantAnnaResults",
     "SunAbrahamResults",
+    "ImputationDiDResults",
     pd.DataFrame,
 ]
 
@@ -438,7 +440,7 @@ def _extract_plot_data(
     raise TypeError(
         f"Cannot extract plot data from {type(results).__name__}. "
         "Expected MultiPeriodDiDResults, CallawaySantAnnaResults, "
-        "SunAbrahamResults, or DataFrame."
+        "SunAbrahamResults, ImputationDiDResults, or DataFrame."
     )
 
 

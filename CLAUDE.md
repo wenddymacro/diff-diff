@@ -97,6 +97,16 @@ cross-platform compilation - no OpenBLAS or Intel MKL installation required.
   - Alternative to Callaway-Sant'Anna with different weighting scheme
   - Useful robustness check when both estimators agree
 
+- **`diff_diff/imputation.py`** - Borusyak-Jaravel-Spiess imputation DiD estimator:
+  - `ImputationDiD` - Borusyak et al. (2024) efficient imputation estimator for staggered DiD
+  - `ImputationDiDResults` - Results with overall ATT, event study, group effects, pre-trend test
+  - `ImputationBootstrapResults` - Multiplier bootstrap inference results
+  - `imputation_did()` - Convenience function
+  - Steps: (1) OLS on untreated obs for unit+time FE, (2) impute counterfactual Y(0), (3) aggregate
+  - Conservative variance (Theorem 3) with `aux_partition` parameter for SE tightness
+  - Pre-trend test (Equation 9) via `results.pretrend_test()`
+  - Proposition 5: NaN for unidentified long-run horizons without never-treated units
+
 - **`diff_diff/triple_diff.py`** - Triple Difference (DDD) estimator:
   - `TripleDifference` - Ortiz-Villavicencio & Sant'Anna (2025) estimator for DDD designs
   - `TripleDifferenceResults` - Results with ATT, SEs, cell means, diagnostics
@@ -255,6 +265,7 @@ cross-platform compilation - no OpenBLAS or Intel MKL installation required.
    Standalone estimators (each has own get_params/set_params):
    ├── CallawaySantAnna
    ├── SunAbraham
+   ├── ImputationDiD
    ├── TripleDifference
    ├── TROP
    ├── SyntheticDiD
@@ -364,6 +375,7 @@ Tests mirror the source modules:
 - `tests/test_estimators.py` - Tests for DifferenceInDifferences, TWFE, MultiPeriodDiD, SyntheticDiD
 - `tests/test_staggered.py` - Tests for CallawaySantAnna
 - `tests/test_sun_abraham.py` - Tests for SunAbraham interaction-weighted estimator
+- `tests/test_imputation.py` - Tests for ImputationDiD (Borusyak et al. 2024) estimator
 - `tests/test_triple_diff.py` - Tests for Triple Difference (DDD) estimator
 - `tests/test_trop.py` - Tests for Triply Robust Panel (TROP) estimator
 - `tests/test_bacon.py` - Tests for Goodman-Bacon decomposition

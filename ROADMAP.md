@@ -10,7 +10,7 @@ For past changes and release history, see [CHANGELOG.md](CHANGELOG.md).
 
 diff-diff v2.1.1 is a **production-ready** DiD library with feature parity with R's `did` + `HonestDiD` + `synthdid` ecosystem for core DiD analysis:
 
-- **Core estimators**: Basic DiD, TWFE, MultiPeriod, Callaway-Sant'Anna, Sun-Abraham, Synthetic DiD, Triple Difference (DDD), TROP
+- **Core estimators**: Basic DiD, TWFE, MultiPeriod, Callaway-Sant'Anna, Sun-Abraham, Borusyak-Jaravel-Spiess Imputation, Synthetic DiD, Triple Difference (DDD), TROP
 - **Valid inference**: Robust SEs, cluster SEs, wild bootstrap, multiplier bootstrap, placebo-based variance
 - **Assumption diagnostics**: Parallel trends tests, placebo tests, Goodman-Bacon decomposition
 - **Sensitivity analysis**: Honest DiD (Rambachan-Roth), Pre-trends power analysis (Roth 2022)
@@ -24,15 +24,9 @@ diff-diff v2.1.1 is a **production-ready** DiD library with feature parity with 
 
 High-value additions building on our existing foundation.
 
-### Borusyak-Jaravel-Spiess Imputation Estimator
+### ~~Borusyak-Jaravel-Spiess Imputation Estimator~~ ✅ Implemented (v2.2)
 
-More efficient than Callaway-Sant'Anna when treatment effects are homogeneous across groups/time. Uses imputation rather than aggregation.
-
-- Imputes untreated potential outcomes using pre-treatment data
-- More efficient under homogeneous effects assumption
-- Can handle unbalanced panels more naturally
-
-**Reference**: Borusyak, Jaravel, and Spiess (2024). *Review of Economic Studies*.
+Implemented as `ImputationDiD` — see `diff_diff/imputation.py`. Includes conservative variance (Theorem 3), event study and group aggregation, pre-trend test (Equation 9), multiplier bootstrap, and Proposition 5 handling for no never-treated units.
 
 ### Gardner's Two-Stage DiD (did2s)
 
