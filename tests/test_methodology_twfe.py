@@ -483,12 +483,15 @@ class TestRBenchmarkTWFE:
 class TestTWFEEdgeCases:
     """Test all edge cases documented in docs/methodology/REGISTRY.md."""
 
-    def test_staggered_treatment_warning(self):
-        """Staggered treatment timing triggers UserWarning.
+    def test_staggered_treatment_warning_multiperiod_time(self):
+        """Staggered treatment warning fires when `time` is multi-valued.
 
-        The staggered check looks for different first-treatment times in the
-        `time` column. We use `time="period"` (multi-valued) so the check
-        can detect different cohorts starting treatment at different periods.
+        This tests the multi-period `time` scenario. When `time` has actual
+        period values (not binary 0/1), the staggered check can detect
+        different cohorts starting treatment at different periods. We use
+        `time="period"` here because the standard binary `time="post"`
+        configuration cannot detect staggering (see
+        test_staggered_warning_not_fired_with_binary_time).
         """
         np.random.seed(42)
         data = []
@@ -518,6 +521,47 @@ class TestTWFEEdgeCases:
 
         staggered_warnings = [x for x in w if "Staggered treatment" in str(x.message)]
         assert len(staggered_warnings) > 0, "Expected staggered treatment warning"
+
+    def test_staggered_warning_not_fired_with_binary_time(self):
+        """Staggered warning does NOT fire with binary time (known limitation).
+
+        When `time` is a binary post indicator (0/1), all treated units appear
+        to start treatment at time=1, so unique_treat_times=[1] and the
+        staggered check cannot distinguish cohorts. This is a documented
+        limitation — users with staggered designs should use `decompose()` or
+        `CallawaySantAnna` directly.
+        """
+        np.random.seed(42)
+        data = []
+        for unit in range(20):
+            # Units 0-4: treated at period 2 (early cohort)
+            # Units 5-9: treated at period 3 (late cohort)
+            # Units 10-19: never treated
+            for period in range(5):
+                if unit < 5:
+                    treated = 1 if period >= 2 else 0
+                elif unit < 10:
+                    treated = 1 if period >= 3 else 0
+                else:
+                    treated = 0
+                post = 1 if period >= 2 else 0
+                y = 10.0 + unit * 0.1 + period * 0.5 + treated * 3.0 + np.random.normal(0, 0.5)
+                data.append({
+                    "unit": unit, "period": period, "post": post,
+                    "treated": treated, "outcome": y,
+                })
+        df = pd.DataFrame(data)
+
+        twfe = TwoWayFixedEffects(robust=True)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            # With binary time="post", staggering is undetectable
+            twfe.fit(df, outcome="outcome", treatment="treated", time="post", unit="unit")
+
+        staggered_warnings = [x for x in w if "Staggered treatment" in str(x.message)]
+        assert len(staggered_warnings) == 0, (
+            "Staggered warning should NOT fire with binary time (known limitation)"
+        )
 
     def test_auto_clusters_at_unit_level(self):
         """SE with cluster=None (default) equals SE when explicitly passing cluster='unit'."""

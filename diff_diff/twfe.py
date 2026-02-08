@@ -294,6 +294,10 @@ class TwoWayFixedEffects(DifferenceInDifferences):
 
         Identifies if different units start treatment at different times,
         which can bias TWFE estimates when treatment effects are heterogeneous.
+
+        Note: This check requires ``time`` to have actual period values (not
+        binary 0/1). With binary time, all treated units appear to start at
+        time=1, so staggering is undetectable.
         """
         # Find first treatment time for each unit
         treated_obs = data[data[treatment] == 1]

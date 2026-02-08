@@ -208,6 +208,10 @@ variables appear to the left of the `|` separator.
   `treated × period_number` instead of `treated × post_indicator`, which is not the standard
   D_it treatment indicator. Users must create a binary `post` column and pass it as `time`.
   This is a known limitation and does not affect correctness when used as intended.
+- **Staggered treatment warning**: The warning only fires when `time` has >2 unique values
+  (i.e., actual period numbers). With binary `time="post"`, all treated units appear to start
+  treatment at `time=1`, making staggering undetectable. Users with staggered designs should
+  use `decompose()` or `CallawaySantAnna` directly for proper diagnostics.
 
 ---
 
