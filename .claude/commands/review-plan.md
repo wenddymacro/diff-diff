@@ -1,6 +1,6 @@
 ---
 description: Review a Claude Code plan file from a staff engineer perspective
-argument-hint: "<path-to-plan-file> [--updated]"
+argument-hint: "[--updated] <path-to-plan-file>"
 ---
 
 # Review Plan
