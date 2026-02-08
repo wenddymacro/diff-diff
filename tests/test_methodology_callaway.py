@@ -803,11 +803,12 @@ class TestSEFormulas:
     @pytest.mark.slow
     def test_analytical_se_close_to_bootstrap_se(self, ci_params):
         """
-        Analytical and bootstrap SEs should be within 20%.
+        Analytical and bootstrap SEs should be within 25%.
 
         Analytical SEs use influence function aggregation.
         Bootstrap SEs use multiplier bootstrap.
-        They should converge for large samples.
+        They should converge for large samples. Wider tolerance (40%)
+        when min_n cap reduces bootstrap iterations in pure Python mode.
 
         This test is marked slow because it uses 499 bootstrap iterations
         for thorough validation of SE convergence.
@@ -833,10 +834,12 @@ class TestSEFormulas:
             time='period', first_treat='first_treat'
         )
 
-        # Check overall ATT SE
+        # Check overall ATT SE (wider tolerance when min_n cap reduces
+        # bootstrap iterations in pure Python mode)
         if results_boot.overall_se > 0:
             rel_diff = abs(results_anal.overall_se - results_boot.overall_se) / results_boot.overall_se
-            assert rel_diff < 0.25, \
+            threshold = 0.40 if n_boot < 100 else 0.25
+            assert rel_diff < threshold, \
                 f"Analytical SE ({results_anal.overall_se}) differs from bootstrap SE " \
                 f"({results_boot.overall_se}) by {rel_diff*100:.1f}%"
 

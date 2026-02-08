@@ -64,7 +64,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install test dependencies
-        run: pip install pytest numpy pandas scipy
+        run: pip install pytest pytest-xdist numpy pandas scipy
 
       - name: Build and install with maturin
         run: |
@@ -121,14 +121,14 @@ jobs:
       - name: Run tests with Rust backend (Unix)
         if: runner.os != 'Windows'
         working-directory: /tmp
-        run: DIFF_DIFF_BACKEND=rust pytest tests/ -x -q
+        run: DIFF_DIFF_BACKEND=rust pytest tests/ -q -n auto --dist worksteal
 
       - name: Run tests with Rust backend (Windows)
         if: runner.os == 'Windows'
         working-directory: ${{ runner.temp }}
         run: |
           $env:DIFF_DIFF_BACKEND="rust"
-          pytest tests/ -x -q
+          pytest tests/ -q -n auto --dist worksteal
         shell: pwsh
 
   # Test pure Python fallback (without Rust extension)
@@ -144,7 +144,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install numpy pandas scipy pytest
+        run: pip install numpy pandas scipy pytest pytest-xdist
 
       - name: Verify pure Python mode
         run: |
@@ -152,4 +152,4 @@ jobs:
           PYTHONPATH=. python -c "from diff_diff import HAS_RUST_BACKEND; print(f'HAS_RUST_BACKEND: {HAS_RUST_BACKEND}'); assert not HAS_RUST_BACKEND"
 
       - name: Run tests in pure Python mode
-        run: PYTHONPATH=. DIFF_DIFF_BACKEND=python pytest tests/ -x -q --ignore=tests/test_rust_backend.py
+        run: PYTHONPATH=. DIFF_DIFF_BACKEND=python pytest tests/ -q --ignore=tests/test_rust_backend.py -n auto --dist worksteal

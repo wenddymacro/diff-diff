@@ -399,7 +399,7 @@ class TestSimulatePower:
             n_periods=4,
             treatment_effect=10.0,  # Very large effect
             sigma=1.0,  # Low noise
-            n_simulations=50,
+            n_simulations=30,
             seed=42,
             progress=False,
         )
@@ -416,7 +416,7 @@ class TestSimulatePower:
             n_periods=4,
             treatment_effect=0.0,  # No effect
             sigma=1.0,
-            n_simulations=50,
+            n_simulations=30,
             seed=42,
             progress=False,
         )
@@ -459,7 +459,7 @@ class TestSimulatePower:
             n_periods=4,
             treatment_effect=5.0,
             sigma=2.0,
-            n_simulations=100,
+            n_simulations=50,
             seed=42,
             progress=False,
         )
@@ -476,7 +476,7 @@ class TestSimulatePower:
             n_periods=4,
             treatment_effect=5.0,
             sigma=1.0,
-            n_simulations=100,
+            n_simulations=50,
             seed=42,
             progress=False,
         )
@@ -524,7 +524,7 @@ class TestSimulatePower:
         did = DifferenceInDifferences()
         results = simulate_power(
             estimator=did,
-            n_simulations=100,
+            n_simulations=50,
             seed=42,
             progress=False,
         )

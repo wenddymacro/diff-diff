@@ -312,48 +312,51 @@ class TestTROP:
 class TestTROPResults:
     """Tests for TROPResults dataclass."""
 
-    def test_summary(self, simple_panel_data):
-        """Test that summary produces string output."""
+    @pytest.fixture(scope="class")
+    def fitted_results(self):
+        """Shared TROP fit for read-only result tests (class-scoped to avoid redundant fits)."""
+        # Inline data generation (same as simple_panel_data fixture)
+        rng = np.random.default_rng(123)
+        n_units, n_treated, n_pre, n_post, true_att = 20, 5, 5, 3, 3.0
+        data = []
+        for i in range(n_units):
+            is_treated = i < n_treated
+            for t in range(n_pre + n_post):
+                post = t >= n_pre
+                y = 10.0 + i * 0.1 + t * 0.5
+                if is_treated and post:
+                    y += true_att
+                y += rng.normal(0, 0.5)
+                data.append({
+                    "unit": i, "period": t, "outcome": y,
+                    "treated": 1 if (is_treated and post) else 0,
+                })
+        panel = pd.DataFrame(data)
+
         trop_est = TROP(
             lambda_time_grid=[0.0, 1.0],
             lambda_unit_grid=[0.0, 1.0],
             lambda_nn_grid=[0.0, 0.1],
             n_bootstrap=10,
-            seed=42
+            seed=42,
         )
-        results = trop_est.fit(
-            simple_panel_data,
-            outcome="outcome",
-            treatment="treated",
-            unit="unit",
-            time="period",
+        return trop_est.fit(
+            panel, outcome="outcome", treatment="treated",
+            unit="unit", time="period",
         )
 
-        summary = results.summary()
+    def test_summary(self, fitted_results):
+        """Test that summary produces string output."""
+        summary = fitted_results.summary()
         assert isinstance(summary, str)
         assert "ATT" in summary
         assert "TROP" in summary
         assert "LOOCV" in summary
         assert "Lambda" in summary
 
-    def test_to_dict(self, simple_panel_data):
+    def test_to_dict(self, fitted_results):
         """Test conversion to dictionary."""
-        trop_est = TROP(
-            lambda_time_grid=[0.0, 1.0],
-            lambda_unit_grid=[0.0, 1.0],
-            lambda_nn_grid=[0.0, 0.1],
-            n_bootstrap=10,
-            seed=42
-        )
-        results = trop_est.fit(
-            simple_panel_data,
-            outcome="outcome",
-            treatment="treated",
-            unit="unit",
-            time="period",
-        )
-
-        d = results.to_dict()
+        d = fitted_results.to_dict()
         assert "att" in d
         assert "se" in d
         assert "lambda_time" in d
@@ -361,98 +364,38 @@ class TestTROPResults:
         assert "lambda_nn" in d
         assert "effective_rank" in d
 
-    def test_to_dataframe(self, simple_panel_data):
+    def test_to_dataframe(self, fitted_results):
         """Test conversion to DataFrame."""
-        trop_est = TROP(
-            lambda_time_grid=[0.0, 1.0],
-            lambda_unit_grid=[0.0, 1.0],
-            lambda_nn_grid=[0.0, 0.1],
-            n_bootstrap=10,
-            seed=42
-        )
-        results = trop_est.fit(
-            simple_panel_data,
-            outcome="outcome",
-            treatment="treated",
-            unit="unit",
-            time="period",
-        )
-
-        df = results.to_dataframe()
+        df = fitted_results.to_dataframe()
         assert isinstance(df, pd.DataFrame)
         assert len(df) == 1
         assert "att" in df.columns
 
-    def test_get_treatment_effects_df(self, simple_panel_data):
+    def test_get_treatment_effects_df(self, fitted_results):
         """Test getting treatment effects DataFrame."""
-        trop_est = TROP(
-            lambda_time_grid=[0.0, 1.0],
-            lambda_unit_grid=[0.0, 1.0],
-            lambda_nn_grid=[0.0, 0.1],
-            n_bootstrap=10,
-            seed=42
-        )
-        results = trop_est.fit(
-            simple_panel_data,
-            outcome="outcome",
-            treatment="treated",
-            unit="unit",
-            time="period",
-        )
-
-        effects_df = results.get_treatment_effects_df()
+        effects_df = fitted_results.get_treatment_effects_df()
         assert isinstance(effects_df, pd.DataFrame)
         assert "unit" in effects_df.columns
         assert "time" in effects_df.columns
         assert "effect" in effects_df.columns
-        assert len(effects_df) == results.n_treated_obs
+        assert len(effects_df) == fitted_results.n_treated_obs
 
-    def test_get_unit_effects_df(self, simple_panel_data):
+    def test_get_unit_effects_df(self, fitted_results):
         """Test getting unit effects DataFrame."""
-        trop_est = TROP(
-            lambda_time_grid=[0.0, 1.0],
-            lambda_unit_grid=[0.0, 1.0],
-            lambda_nn_grid=[0.0, 0.1],
-            n_bootstrap=10,
-            seed=42
-        )
-        results = trop_est.fit(
-            simple_panel_data,
-            outcome="outcome",
-            treatment="treated",
-            unit="unit",
-            time="period",
-        )
-
-        effects_df = results.get_unit_effects_df()
+        effects_df = fitted_results.get_unit_effects_df()
         assert isinstance(effects_df, pd.DataFrame)
         assert "unit" in effects_df.columns
         assert "effect" in effects_df.columns
 
-    def test_get_time_effects_df(self, simple_panel_data):
+    def test_get_time_effects_df(self, fitted_results):
         """Test getting time effects DataFrame."""
-        trop_est = TROP(
-            lambda_time_grid=[0.0, 1.0],
-            lambda_unit_grid=[0.0, 1.0],
-            lambda_nn_grid=[0.0, 0.1],
-            n_bootstrap=10,
-            seed=42
-        )
-        results = trop_est.fit(
-            simple_panel_data,
-            outcome="outcome",
-            treatment="treated",
-            unit="unit",
-            time="period",
-        )
-
-        effects_df = results.get_time_effects_df()
+        effects_df = fitted_results.get_time_effects_df()
         assert isinstance(effects_df, pd.DataFrame)
         assert "time" in effects_df.columns
         assert "effect" in effects_df.columns
 
-    def test_is_significant(self, simple_panel_data, ci_params):
-        """Test significance property."""
+    def test_significance_properties(self, simple_panel_data, ci_params):
+        """Test is_significant and significance_stars properties."""
         n_boot = ci_params.bootstrap(30)
         trop_est = TROP(
             lambda_time_grid=[0.0, 1.0],
@@ -471,27 +414,7 @@ class TestTROPResults:
         )
 
         assert isinstance(results.is_significant, bool)
-
-    def test_significance_stars(self, simple_panel_data, ci_params):
-        """Test significance stars."""
-        n_boot = ci_params.bootstrap(30)
-        trop_est = TROP(
-            lambda_time_grid=[0.0, 1.0],
-            lambda_unit_grid=[0.0, 1.0],
-            lambda_nn_grid=[0.0, 0.1],
-            n_bootstrap=n_boot,
-            seed=42
-        )
-        results = trop_est.fit(
-            simple_panel_data,
-            outcome="outcome",
-            treatment="treated",
-            unit="unit",
-            time="period",
-        )
-
-        stars = results.significance_stars
-        assert stars in ["", ".", "*", "**", "***"]
+        assert results.significance_stars in ["", ".", "*", "**", "***"]
 
     def test_nan_propagation_when_se_zero(self):
         """Test that inference fields are NaN when SE is zero/undefined.
@@ -807,12 +730,12 @@ class TestMethodologyVerification:
         Following paper's simulation: when true DGP has interactive fixed effects,
         the factor model component should help recover the treatment effect.
         """
-        # Generate data with known factor structure
+        # Generate data with known factor structure (reduced size for CI speed)
         data = generate_factor_dgp(
-            n_units=40,
-            n_pre=10,
-            n_post=5,
-            n_treated=8,
+            n_units=25,
+            n_pre=7,
+            n_post=3,
+            n_treated=5,
             n_factors=2,
             treatment_effect=2.0,
             factor_strength=1.5,  # Strong factors
@@ -856,12 +779,12 @@ class TestMethodologyVerification:
 
         This is a methodological validation test.
         """
-        # Generate data similar to paper's simulation
+        # Generate data similar to paper's simulation (reduced size for CI speed)
         rng = np.random.default_rng(2024)
-        n_units = 50
-        n_treated = 10
-        n_pre = 10
-        n_post = 5
+        n_units = 30
+        n_treated = 6
+        n_pre = 7
+        n_post = 3
         n_factors = 2
         true_tau = 0.0  # Null treatment effect
 

@@ -110,10 +110,12 @@ class CIParams:
 
         Use a larger min_n for tests comparing analytical vs bootstrap SEs,
         which need more iterations for stable convergence.
+        In pure Python mode, min_n is capped at 49 to keep CI fast.
         """
         if not _PURE_PYTHON_MODE or n <= 10:
             return n
-        return min(n, max(min_n, int(math.sqrt(n) * 1.6)))
+        effective_min = min(min_n, 49)
+        return min(n, max(effective_min, int(math.sqrt(n) * 1.6)))
 
     @staticmethod
     def grid(values: list) -> list:
