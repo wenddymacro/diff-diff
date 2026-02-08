@@ -33,7 +33,7 @@ Supported formats:
 3. Full PR review: https://github.com/owner/repo/pull/42#pullrequestreview-345678
 ```
 
-Strip any query parameters (`?...`) from the URL before parsing. Then parse the URL path and fragment:
+Strip any query parameters from the URL before parsing: remove the query string (the `?...` portion) while preserving the `#` fragment. For example, `https://github.com/o/r/pull/1?notification_referrer_id=abc#issuecomment-123` becomes `https://github.com/o/r/pull/1#issuecomment-123`. If the URL has `?` after `#`, no stripping is needed (the `?` is part of the fragment). Then parse the URL path and fragment:
 
 **URL path pattern**: `https://github.com/{owner}/{repo}/pull/{pr_number}[/...]#{fragment}`
 
@@ -76,10 +76,10 @@ gh api repos/{owner}/{repo}/pulls/comments/{id} --jq '{body: .body, user: .user.
 gh api repos/{owner}/{repo}/pulls/{pr_number}/reviews/{id} --jq '{body: .body, user: .user.login, state: .state}'
 
 # All inline comments belonging to this review
-gh api repos/{owner}/{repo}/pulls/{pr_number}/reviews/{id}/comments --jq '.[] | {body: .body, path: .path, line: .line, diff_hunk: .diff_hunk}'
+gh api repos/{owner}/{repo}/pulls/{pr_number}/reviews/{id}/comments --paginate --jq '.[] | {body: .body, path: .path, line: .line, diff_hunk: .diff_hunk}'
 ```
 
-Note: The inline comments query uses `.[] | {...}` (newline-delimited JSON objects) rather than wrapping in an array, to avoid invalid JSON when `--paginate` would concatenate multiple array pages. If there are many inline comments and results appear truncated, add `--paginate` to the command.
+Note: The inline comments query uses `.[] | {...}` (newline-delimited JSON objects) rather than wrapping in an array, because `--paginate` concatenates multiple pages and `[...] + [...]` is not valid JSON. The `.[] |` format produces newline-delimited objects that concatenate cleanly.
 
 For PR reviews, the actionable feedback is often in the inline comments, not just the review body. Always fetch both.
 
@@ -90,7 +90,7 @@ For PR reviews, the actionable feedback is often in the inline comments, not jus
 gh pr view {pr_number} --repo {owner}/{repo} --json title,body,baseRefName,headRefName,author
 
 # Changed files
-gh api repos/{owner}/{repo}/pulls/{pr_number}/files --jq '.[] | .filename'
+gh api repos/{owner}/{repo}/pulls/{pr_number}/files --paginate --jq '.[] | .filename'
 ```
 
 ### Step 4: Check Branch State
@@ -99,9 +99,9 @@ gh api repos/{owner}/{repo}/pulls/{pr_number}/files --jq '.[] | .filename'
 git branch --show-current
 ```
 
-Compare the current branch to the PR's `headRefName`. If they don't match, use AskUserQuestion to ask:
+Compare the current branch to the PR's head branch (`headRefName`). If they don't match, use AskUserQuestion to ask:
 ```
-You are currently on branch '<current-branch>' but the PR targets branch '<headRefName>'.
+You are currently on branch '<current-branch>' but the PR's head branch is '<headRefName>'.
 
 Options:
 1. Continue on current branch
