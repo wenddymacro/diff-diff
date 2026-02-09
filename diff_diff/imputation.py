@@ -149,9 +149,7 @@ class ImputationDiDResults:
     n_control_units: int
     alpha: float = 0.05
     pretrend_results: Optional[Dict[str, Any]] = field(default=None, repr=False)
-    bootstrap_results: Optional[ImputationBootstrapResults] = field(
-        default=None, repr=False
-    )
+    bootstrap_results: Optional[ImputationBootstrapResults] = field(default=None, repr=False)
     # Internal: stores data needed for pretrend_test()
     _estimator_ref: Optional[Any] = field(default=None, repr=False)
 
@@ -209,8 +207,14 @@ class ImputationDiDResults:
             ]
         )
 
-        t_str = f"{self.overall_t_stat:>10.3f}" if np.isfinite(self.overall_t_stat) else f"{'NaN':>10}"
-        p_str = f"{self.overall_p_value:>10.4f}" if np.isfinite(self.overall_p_value) else f"{'NaN':>10}"
+        t_str = (
+            f"{self.overall_t_stat:>10.3f}" if np.isfinite(self.overall_t_stat) else f"{'NaN':>10}"
+        )
+        p_str = (
+            f"{self.overall_p_value:>10.4f}"
+            if np.isfinite(self.overall_p_value)
+            else f"{'NaN':>10}"
+        )
         sig = _get_significance_stars(self.overall_p_value)
 
         lines.extend(
@@ -243,17 +247,20 @@ class ImputationDiDResults:
                 if eff.get("n_obs", 1) == 0:
                     # Reference period marker
                     lines.append(
-                        f"[ref: {h}]"
-                        f"{'0.0000':>17} {'---':>12} {'---':>10} {'---':>10} {'':>6}"
+                        f"[ref: {h}]" f"{'0.0000':>17} {'---':>12} {'---':>10} {'---':>10} {'':>6}"
                     )
                 elif np.isnan(eff["effect"]):
-                    lines.append(
-                        f"{h:<15} {'NaN':>12} {'NaN':>12} {'NaN':>10} {'NaN':>10} {'':>6}"
-                    )
+                    lines.append(f"{h:<15} {'NaN':>12} {'NaN':>12} {'NaN':>10} {'NaN':>10} {'':>6}")
                 else:
                     e_sig = _get_significance_stars(eff["p_value"])
-                    e_t = f"{eff['t_stat']:>10.3f}" if np.isfinite(eff["t_stat"]) else f"{'NaN':>10}"
-                    e_p = f"{eff['p_value']:>10.4f}" if np.isfinite(eff["p_value"]) else f"{'NaN':>10}"
+                    e_t = (
+                        f"{eff['t_stat']:>10.3f}" if np.isfinite(eff["t_stat"]) else f"{'NaN':>10}"
+                    )
+                    e_p = (
+                        f"{eff['p_value']:>10.4f}"
+                        if np.isfinite(eff["p_value"])
+                        else f"{'NaN':>10}"
+                    )
                     lines.append(
                         f"{h:<15} {eff['effect']:>12.4f} {eff['se']:>12.4f} "
                         f"{e_t} {e_p} {e_sig:>6}"
@@ -277,13 +284,17 @@ class ImputationDiDResults:
             for g in sorted(self.group_effects.keys()):
                 eff = self.group_effects[g]
                 if np.isnan(eff["effect"]):
-                    lines.append(
-                        f"{g:<15} {'NaN':>12} {'NaN':>12} {'NaN':>10} {'NaN':>10} {'':>6}"
-                    )
+                    lines.append(f"{g:<15} {'NaN':>12} {'NaN':>12} {'NaN':>10} {'NaN':>10} {'':>6}")
                 else:
                     g_sig = _get_significance_stars(eff["p_value"])
-                    g_t = f"{eff['t_stat']:>10.3f}" if np.isfinite(eff["t_stat"]) else f"{'NaN':>10}"
-                    g_p = f"{eff['p_value']:>10.4f}" if np.isfinite(eff["p_value"]) else f"{'NaN':>10}"
+                    g_t = (
+                        f"{eff['t_stat']:>10.3f}" if np.isfinite(eff["t_stat"]) else f"{'NaN':>10}"
+                    )
+                    g_p = (
+                        f"{eff['p_value']:>10.4f}"
+                        if np.isfinite(eff["p_value"])
+                        else f"{'NaN':>10}"
+                    )
                     lines.append(
                         f"{g:<15} {eff['effect']:>12.4f} {eff['se']:>12.4f} "
                         f"{g_t} {g_p} {g_sig:>6}"
@@ -366,8 +377,7 @@ class ImputationDiDResults:
         elif level == "group":
             if self.group_effects is None:
                 raise ValueError(
-                    "Group effects not computed. "
-                    "Use aggregate='group' or aggregate='all'."
+                    "Group effects not computed. " "Use aggregate='group' or aggregate='all'."
                 )
             rows = []
             for g, data in sorted(self.group_effects.items()):
@@ -654,24 +664,18 @@ class ImputationDiD:
                 "No untreated observations found. Cannot estimate counterfactual model."
             )
         if n_omega_1 == 0:
-            raise ValueError(
-                "No treated observations found. Nothing to estimate."
-            )
+            raise ValueError("No treated observations found. Nothing to estimate.")
 
         # Identify groups and time periods
         time_periods = sorted(df[time].unique())
-        treatment_groups = sorted(
-            [g for g in df[first_treat].unique() if g > 0 and g != np.inf]
-        )
+        treatment_groups = sorted([g for g in df[first_treat].unique() if g > 0 and g != np.inf])
 
         if len(treatment_groups) == 0:
             raise ValueError("No treated units found. Check 'first_treat' column.")
 
         # Unit info
         unit_info = (
-            df.groupby(unit)
-            .agg({first_treat: "first", "_never_treated": "first"})
-            .reset_index()
+            df.groupby(unit).agg({first_treat: "first", "_never_treated": "first"}).reset_index()
         )
         n_treated_units = int((~unit_info["_never_treated"]).sum())
         # Control units = units with at least one untreated observation
@@ -726,7 +730,8 @@ class ImputationDiD:
                     f"{'...' if len(periods_missing_fe) > 5 else ''})"
                 )
             msg = (
-                "Rank condition violated: " + "; ".join(parts)
+                "Rank condition violated: "
+                + "; ".join(parts)
                 + ". Affected treatment effects will be NaN."
             )
             if self.rank_deficient_action == "error":
@@ -737,8 +742,16 @@ class ImputationDiD:
 
         # ---- Step 2: Impute treatment effects ----
         tau_hat, y_hat_0 = self._impute_treatment_effects(
-            df, outcome, unit, time, covariates,
-            omega_1_mask, unit_fe, time_fe, grand_mean, delta_hat
+            df,
+            outcome,
+            unit,
+            time,
+            covariates,
+            omega_1_mask,
+            unit_fe,
+            time_fe,
+            grand_mean,
+            delta_hat,
         )
 
         # Store tau_hat in dataframe
@@ -756,27 +769,35 @@ class ImputationDiD:
             overall_att = float(np.mean(valid_tau))
 
         # ---- Conservative variance (Theorem 3) ----
-        overall_se = self._compute_conservative_variance(
-            df=df,
-            outcome=outcome,
-            unit=unit,
-            time=time,
-            first_treat=first_treat,
-            covariates=covariates,
-            omega_0_mask=omega_0_mask,
-            omega_1_mask=omega_1_mask,
-            unit_fe=unit_fe,
-            time_fe=time_fe,
-            grand_mean=grand_mean,
-            delta_hat=delta_hat,
-            weights=np.ones(n_omega_1) / n_omega_1,
-            cluster_var=cluster_var,
-        )
+        # Build weights matching the ATT: uniform over finite tau_hat, zero for NaN
+        overall_weights = np.zeros(n_omega_1)
+        finite_mask = np.isfinite(tau_hat)
+        n_valid = int(finite_mask.sum())
+        if n_valid > 0:
+            overall_weights[finite_mask] = 1.0 / n_valid
+
+        if n_valid == 0:
+            overall_se = np.nan
+        else:
+            overall_se = self._compute_conservative_variance(
+                df=df,
+                outcome=outcome,
+                unit=unit,
+                time=time,
+                first_treat=first_treat,
+                covariates=covariates,
+                omega_0_mask=omega_0_mask,
+                omega_1_mask=omega_1_mask,
+                unit_fe=unit_fe,
+                time_fe=time_fe,
+                grand_mean=grand_mean,
+                delta_hat=delta_hat,
+                weights=overall_weights,
+                cluster_var=cluster_var,
+            )
 
         overall_t = (
-            overall_att / overall_se
-            if np.isfinite(overall_se) and overall_se > 0
-            else np.nan
+            overall_att / overall_se if np.isfinite(overall_se) and overall_se > 0 else np.nan
         )
         overall_p = compute_p_value(overall_t)
         overall_ci = (
@@ -828,9 +849,7 @@ class ImputationDiD:
 
         # Build treatment effects dataframe
         treated_df = df.loc[omega_1_mask, [unit, time, "_tau_hat", "_rel_time"]].copy()
-        treated_df = treated_df.rename(
-            columns={"_tau_hat": "tau_hat", "_rel_time": "rel_time"}
-        )
+        treated_df = treated_df.rename(columns={"_tau_hat": "tau_hat", "_rel_time": "rel_time"})
         treated_df["weight"] = 1.0 / n_treated
 
         # Store fit data for pretrend_test
@@ -870,9 +889,7 @@ class ImputationDiD:
             # Update inference with bootstrap results
             overall_se = bootstrap_results.overall_att_se
             overall_t = (
-                overall_att / overall_se
-                if np.isfinite(overall_se) and overall_se > 0
-                else np.nan
+                overall_att / overall_se if np.isfinite(overall_se) and overall_se > 0 else np.nan
             )
             overall_p = bootstrap_results.overall_att_p_value
             overall_ci = bootstrap_results.overall_att_ci
@@ -880,16 +897,19 @@ class ImputationDiD:
             # Update event study
             if event_study_effects and bootstrap_results.event_study_ses:
                 for h in event_study_effects:
-                    if h in bootstrap_results.event_study_ses and event_study_effects[h].get("n_obs", 1) > 0:
+                    if (
+                        h in bootstrap_results.event_study_ses
+                        and event_study_effects[h].get("n_obs", 1) > 0
+                    ):
                         event_study_effects[h]["se"] = bootstrap_results.event_study_ses[h]
                         event_study_effects[h]["conf_int"] = bootstrap_results.event_study_cis[h]
-                        event_study_effects[h]["p_value"] = bootstrap_results.event_study_p_values[h]
+                        event_study_effects[h]["p_value"] = bootstrap_results.event_study_p_values[
+                            h
+                        ]
                         eff_val = event_study_effects[h]["effect"]
                         se_val = event_study_effects[h]["se"]
                         event_study_effects[h]["t_stat"] = (
-                            eff_val / se_val
-                            if np.isfinite(se_val) and se_val > 0
-                            else np.nan
+                            eff_val / se_val if np.isfinite(se_val) and se_val > 0 else np.nan
                         )
 
             # Update group effects
@@ -902,9 +922,7 @@ class ImputationDiD:
                         eff_val = group_effects[g]["effect"]
                         se_val = group_effects[g]["se"]
                         group_effects[g]["t_stat"] = (
-                            eff_val / se_val
-                            if np.isfinite(se_val) and se_val > 0
-                            else np.nan
+                            eff_val / se_val if np.isfinite(se_val) and se_val > 0 else np.nan
                         )
 
         # Construct results
@@ -961,17 +979,27 @@ class ImputationDiD:
         """
         n = len(y)
         alpha = np.zeros(n)  # unit FE broadcast to obs level
-        beta = np.zeros(n)   # time FE broadcast to obs level
+        beta = np.zeros(n)  # time FE broadcast to obs level
 
         with np.errstate(invalid="ignore", divide="ignore"):
             for iteration in range(max_iter):
                 # Update time FE: beta_t = mean_i(y_it - alpha_i)
                 resid_after_alpha = y - alpha
-                beta_new = pd.Series(resid_after_alpha, index=idx).groupby(time_vals).transform("mean").values
+                beta_new = (
+                    pd.Series(resid_after_alpha, index=idx)
+                    .groupby(time_vals)
+                    .transform("mean")
+                    .values
+                )
 
                 # Update unit FE: alpha_i = mean_t(y_it - beta_t)
                 resid_after_beta = y - beta_new
-                alpha_new = pd.Series(resid_after_beta, index=idx).groupby(unit_vals).transform("mean").values
+                alpha_new = (
+                    pd.Series(resid_after_beta, index=idx)
+                    .groupby(unit_vals)
+                    .transform("mean")
+                    .values
+                )
 
                 # Check convergence on FE changes
                 max_change = max(
@@ -986,6 +1014,77 @@ class ImputationDiD:
         unit_fe = pd.Series(alpha, index=idx).groupby(unit_vals).first().to_dict()
         time_fe = pd.Series(beta, index=idx).groupby(time_vals).first().to_dict()
         return unit_fe, time_fe
+
+    @staticmethod
+    def _iterative_demean(
+        vals: np.ndarray,
+        unit_vals: np.ndarray,
+        time_vals: np.ndarray,
+        idx: pd.Index,
+        max_iter: int = 100,
+        tol: float = 1e-10,
+    ) -> np.ndarray:
+        """Demean a vector by iterative alternating projection (unit + time FE removal).
+
+        Converges to the exact within-transformation for both balanced and
+        unbalanced panels. For balanced panels, converges in 1-2 iterations.
+        """
+        result = vals.copy()
+        with np.errstate(invalid="ignore", divide="ignore"):
+            for _ in range(max_iter):
+                time_means = (
+                    pd.Series(result, index=idx).groupby(time_vals).transform("mean").values
+                )
+                result_after_time = result - time_means
+                unit_means = (
+                    pd.Series(result_after_time, index=idx)
+                    .groupby(unit_vals)
+                    .transform("mean")
+                    .values
+                )
+                result_new = result_after_time - unit_means
+                if np.max(np.abs(result_new - result)) < tol:
+                    result = result_new
+                    break
+                result = result_new
+        return result
+
+    @staticmethod
+    def _compute_balanced_cohort_mask(
+        df_treated: pd.DataFrame,
+        first_treat: str,
+        rel_times: np.ndarray,
+        all_horizons: List[int],
+        balance_e: int,
+    ) -> np.ndarray:
+        """Compute boolean mask selecting treated obs from balanced cohorts.
+
+        A cohort is 'balanced' if it has observations at every relative time
+        in [-balance_e, max(all_horizons)].
+
+        Returns an array of shape (len(df_treated),) with True for obs in
+        balanced cohorts.
+        """
+        if not all_horizons:
+            return np.ones(len(df_treated), dtype=bool)
+
+        max_h = max(all_horizons)
+        required_range = set(h for h in all_horizons if -balance_e <= h <= max_h)
+
+        cohort_horizons: Dict[Any, set] = {}
+        first_treat_vals = df_treated[first_treat].values
+        for i in range(len(df_treated)):
+            g = first_treat_vals[i]
+            h = int(rel_times[i]) if np.isfinite(rel_times[i]) else None
+            if h is not None:
+                cohort_horizons.setdefault(g, set()).add(h)
+
+        balanced_cohorts = set()
+        for g, horizons in cohort_horizons.items():
+            if required_range.issubset(horizons):
+                balanced_cohorts.add(g)
+
+        return df_treated[first_treat].isin(balanced_cohorts).values
 
     def _fit_untreated_model(
         self,
@@ -1036,35 +1135,18 @@ class ImputationDiD:
             n_cov = len(covariates)
 
             # Step A: Iteratively demean Y and all X columns to remove unit+time FE
-            def _iterative_demean(vals, unit_vals, time_vals, idx,
-                                  max_iter=100, tol=1e-10):
-                """Demean a vector by iterative alternating projection."""
-                result = vals.copy()
-                with np.errstate(invalid="ignore", divide="ignore"):
-                    for _ in range(max_iter):
-                        # Remove time means
-                        time_means = pd.Series(result, index=idx).groupby(
-                            time_vals).transform("mean").values
-                        result_after_time = result - time_means
-                        # Remove unit means
-                        unit_means = pd.Series(result_after_time, index=idx).groupby(
-                            unit_vals).transform("mean").values
-                        result_new = result_after_time - unit_means
-                        if np.max(np.abs(result_new - result)) < tol:
-                            result = result_new
-                            break
-                        result = result_new
-                return result
-
-            y_dm = _iterative_demean(y, units, times, df_0.index)
-            X_dm = np.column_stack([
-                _iterative_demean(X_raw[:, j], units, times, df_0.index)
-                for j in range(n_cov)
-            ])
+            y_dm = self._iterative_demean(y, units, times, df_0.index)
+            X_dm = np.column_stack(
+                [
+                    self._iterative_demean(X_raw[:, j], units, times, df_0.index)
+                    for j in range(n_cov)
+                ]
+            )
 
             # Step B: OLS for covariate coefficients on demeaned data
             result = solve_ols(
-                X_dm, y_dm,
+                X_dm,
+                y_dm,
                 return_vcov=False,
                 rank_deficient_action=self.rank_deficient_action,
                 column_names=covariates,
@@ -1223,12 +1305,20 @@ class ImputationDiD:
 
         # ---- Compute auxiliary model residuals (Equation 8) ----
         epsilon_treated = self._compute_auxiliary_residuals_treated(
-            df_1, outcome, unit, time, first_treat, covariates,
-            unit_fe, time_fe, grand_mean, delta_hat, v_treated
+            df_1,
+            outcome,
+            unit,
+            time,
+            first_treat,
+            covariates,
+            unit_fe,
+            time_fe,
+            grand_mean,
+            delta_hat,
+            v_treated,
         )
         epsilon_untreated = self._compute_residuals_untreated(
-            df_0, outcome, unit, time, covariates,
-            unit_fe, time_fe, grand_mean, delta_hat
+            df_0, outcome, unit, time, covariates, unit_fe, time_fe, grand_mean, delta_hat
         )
 
         # ---- Clustered variance: sigma^2 = sum_i (sum_t v_it * eps_it)^2 ----
@@ -1251,7 +1341,7 @@ class ImputationDiD:
         ve_series = pd.Series(ve_product, index=df.index)
         cluster_sums = ve_series.groupby(cluster_ids).sum()
 
-        sigma_sq = float((cluster_sums ** 2).sum())
+        sigma_sq = float((cluster_sums**2).sum())
         se = np.sqrt(max(sigma_sq, 0.0))
 
         return se
@@ -1364,7 +1454,7 @@ class ImputationDiD:
         # Compute base residuals (Y - Y_hat(0) = tau_hat)
         # NaN for missing FE (consistent with _impute_treatment_effects)
         alpha_i = df_1[unit].map(unit_fe).values.astype(float)  # NaN for missing
-        beta_t = df_1[time].map(time_fe).values.astype(float)   # NaN for missing
+        beta_t = df_1[time].map(time_fe).values.astype(float)  # NaN for missing
         y_hat_0 = grand_mean + alpha_i + beta_t
 
         if delta_hat is not None and covariates:
@@ -1374,10 +1464,7 @@ class ImputationDiD:
 
         # Partition Omega_1 and compute tau_tilde for each group
         if self.aux_partition == "cohort_horizon":
-            group_keys = list(zip(
-                df_1[first_treat].values,
-                df_1["_rel_time"].values
-            ))
+            group_keys = list(zip(df_1[first_treat].values, df_1["_rel_time"].values))
         elif self.aux_partition == "cohort":
             group_keys = list(df_1[first_treat].values)
         elif self.aux_partition == "horizon":
@@ -1471,30 +1558,12 @@ class ImputationDiD:
 
         # Apply balance_e filter
         if balance_e is not None:
-            # Restrict to cohorts observed at all relative times in
-            # [-balance_e, max(all_horizons)]
-            if all_horizons:
-                max_h = max(all_horizons)
-                required_range = set(
-                    h for h in all_horizons if -balance_e <= h <= max_h
-                )
-                # Check which cohorts have all required horizons
-                cohort_horizons: Dict[Any, set] = {}
-                for idx in range(len(df_1)):
-                    g = df_1[first_treat].iloc[idx]
-                    h = int(rel_times[idx]) if np.isfinite(rel_times[idx]) else None
-                    if h is not None:
-                        cohort_horizons.setdefault(g, set()).add(h)
-
-                balanced_cohorts = set()
-                for g, horizons in cohort_horizons.items():
-                    if required_range.issubset(horizons):
-                        balanced_cohorts.add(g)
-
-                # Filter treated observations to balanced cohorts
-                balanced_mask = df_1[first_treat].isin(balanced_cohorts)
-            else:
-                balanced_mask = pd.Series(True, index=df_1.index)
+            balanced_mask = pd.Series(
+                self._compute_balanced_cohort_mask(
+                    df_1, first_treat, rel_times, all_horizons, balance_e
+                ),
+                index=df_1.index,
+            )
         else:
             balanced_mask = pd.Series(True, index=df_1.index)
 
@@ -1745,9 +1814,9 @@ class ImputationDiD:
         )
 
         # Get available pre-treatment relative times (negative values)
-        pre_rel_times = sorted(set(
-            int(h) for h in rel_time_0 if np.isfinite(h) and h < -self.anticipation
-        ))
+        pre_rel_times = sorted(
+            set(int(h) for h in rel_time_0 if np.isfinite(h) and h < -self.anticipation)
+        )
 
         if len(pre_rel_times) == 0:
             return {
@@ -1783,38 +1852,29 @@ class ImputationDiD:
             df_0[col_name] = ((rel_time_0 == h)).astype(float)
             lead_cols.append(col_name)
 
-        # Within-transform everything
-        grand_mean_y = float(df_0[outcome].mean())
-        unit_means_y = df_0.groupby(unit)[outcome].mean()
-        time_means_y = df_0.groupby(time)[outcome].mean()
-
-        y_dm = (
-            df_0[outcome].values
-            - df_0[unit].map(unit_means_y).values
-            - df_0[time].map(time_means_y).values
-            + grand_mean_y
+        # Within-transform via iterative demeaning (exact for unbalanced panels)
+        y_dm = self._iterative_demean(
+            df_0[outcome].values, df_0[unit].values, df_0[time].values, df_0.index
         )
 
         all_x_cols = lead_cols[:]
         if covariates:
             all_x_cols.extend(covariates)
 
-        X_dm = np.zeros((len(df_0), len(all_x_cols)))
-        for j, col in enumerate(all_x_cols):
-            gm = float(df_0[col].mean())
-            um = df_0.groupby(unit)[col].mean()
-            tm = df_0.groupby(time)[col].mean()
-            X_dm[:, j] = (
-                df_0[col].values
-                - df_0[unit].map(um).values
-                - df_0[time].map(tm).values
-                + gm
-            )
+        X_dm = np.column_stack(
+            [
+                self._iterative_demean(
+                    df_0[col].values, df_0[unit].values, df_0[time].values, df_0.index
+                )
+                for col in all_x_cols
+            ]
+        )
 
         # OLS with cluster-robust SEs
         cluster_ids = df_0[cluster_var].values
         result = solve_ols(
-            X_dm, y_dm,
+            X_dm,
+            y_dm,
             cluster_ids=cluster_ids,
             return_vcov=True,
             rank_deficient_action=self.rank_deficient_action,
@@ -1909,13 +1969,27 @@ class ImputationDiD:
 
         tau_hat_full = df["_tau_hat"].values  # NaN for untreated
 
+        # Pre-compute balanced cohort mask for event study (if balance_e is set)
+        es_balanced_mask_treated = None
+        if balance_e is not None and original_event_study:
+            df_1_pre = df.loc[omega_1_mask]
+            rel_times_pre = df_1_pre["_rel_time"].values
+            all_horizons_pre = sorted(set(int(h) for h in rel_times_pre if np.isfinite(h)))
+            if self.horizon_max is not None:
+                all_horizons_pre = [h for h in all_horizons_pre if abs(h) <= self.horizon_max]
+            es_balanced_mask_treated = self._compute_balanced_cohort_mask(
+                df_1_pre, first_treat, rel_times_pre, all_horizons_pre, balance_e
+            )
+
         # Bootstrap distributions
         boot_overall = np.zeros(self.n_bootstrap)
         boot_event_study: Optional[Dict[int, np.ndarray]] = None
         boot_group: Optional[Dict[Any, np.ndarray]] = None
 
         if original_event_study:
-            horizons = [h for h in original_event_study if original_event_study[h].get("n_obs", 0) > 0]
+            horizons = [
+                h for h in original_event_study if original_event_study[h].get("n_obs", 0) > 0
+            ]
             boot_event_study = {h: np.zeros(self.n_bootstrap) for h in horizons}
 
         if original_group:
@@ -1944,7 +2018,9 @@ class ImputationDiD:
                 df_1 = df.loc[omega_1_mask]
                 rel_times = df_1["_rel_time"].values
                 for h in boot_event_study:
-                    h_mask = (rel_times == h)
+                    h_mask = rel_times == h
+                    if es_balanced_mask_treated is not None:
+                        h_mask = h_mask & es_balanced_mask_treated
                     tau_h = treated_tau[h_mask]
                     w_h = treated_weights[h_mask]
                     valid_h = np.isfinite(tau_h)
@@ -2137,5 +2213,3 @@ def imputation_did(
         aggregate=aggregate,
         balance_e=balance_e,
     )
-
-

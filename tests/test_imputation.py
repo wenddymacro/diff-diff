@@ -63,18 +63,17 @@ def generate_test_data(
     effect = treatment_effect * dynamic_mult
 
     outcomes = (
-        unit_fe_expanded
-        + time_fe_expanded
-        + effect * post
-        + rng.standard_normal(len(units)) * 0.5
+        unit_fe_expanded + time_fe_expanded + effect * post + rng.standard_normal(len(units)) * 0.5
     )
 
-    return pd.DataFrame({
-        "unit": units,
-        "time": times,
-        "outcome": outcomes,
-        "first_treat": first_treat_expanded,
-    })
+    return pd.DataFrame(
+        {
+            "unit": units,
+            "time": times,
+            "outcome": outcomes,
+            "first_treat": first_treat_expanded,
+        }
+    )
 
 
 # =============================================================================
@@ -91,8 +90,11 @@ class TestImputationDiD:
 
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         assert est.is_fitted_
@@ -112,8 +114,11 @@ class TestImputationDiD:
 
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         assert results.overall_att > 0
@@ -126,8 +131,11 @@ class TestImputationDiD:
 
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         assert abs(results.overall_att) < 3 * results.overall_se + 0.5
@@ -137,8 +145,11 @@ class TestImputationDiD:
         data = generate_test_data()
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         assert results.overall_att is not None
@@ -151,8 +162,11 @@ class TestImputationDiD:
         data = generate_test_data()
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
             aggregate="event_study",
         )
 
@@ -173,8 +187,11 @@ class TestImputationDiD:
         data = generate_test_data()
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
             aggregate="group",
         )
 
@@ -192,8 +209,11 @@ class TestImputationDiD:
         data = generate_test_data()
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
             aggregate="all",
         )
 
@@ -209,8 +229,11 @@ class TestImputationDiD:
 
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
             covariates=["x1", "x2"],
         )
 
@@ -223,15 +246,21 @@ class TestImputationDiD:
 
         est0 = ImputationDiD(anticipation=0)
         results0 = est0.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
             aggregate="event_study",
         )
 
         est1 = ImputationDiD(anticipation=1)
         results1 = est1.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
             aggregate="event_study",
         )
 
@@ -250,13 +279,19 @@ class TestImputationDiD:
 
         est = ImputationDiD()
         results_unbal = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
             aggregate="event_study",
         )
         results_bal = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
             aggregate="event_study",
             balance_e=2,
         )
@@ -270,8 +305,11 @@ class TestImputationDiD:
 
         est = ImputationDiD(horizon_max=3)
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
             aggregate="event_study",
         )
 
@@ -284,8 +322,11 @@ class TestImputationDiD:
         data = generate_test_data()
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
             aggregate="all",
         )
 
@@ -300,8 +341,11 @@ class TestImputationDiD:
         data = generate_test_data()
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         df = results.to_dataframe("observation")
@@ -314,8 +358,11 @@ class TestImputationDiD:
         data = generate_test_data()
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
             aggregate="event_study",
         )
 
@@ -329,8 +376,11 @@ class TestImputationDiD:
         data = generate_test_data()
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
             aggregate="group",
         )
 
@@ -343,8 +393,11 @@ class TestImputationDiD:
         data = generate_test_data()
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         with pytest.raises(ValueError, match="Unknown level"):
@@ -356,8 +409,12 @@ class TestImputationDiD:
     def test_get_params(self):
         """Test get_params returns all constructor parameters."""
         est = ImputationDiD(
-            anticipation=1, alpha=0.10, n_bootstrap=100,
-            seed=42, horizon_max=5, aux_partition="cohort",
+            anticipation=1,
+            alpha=0.10,
+            n_bootstrap=100,
+            seed=42,
+            horizon_max=5,
+            aux_partition="cohort",
         )
         params = est.get_params()
 
@@ -391,8 +448,11 @@ class TestImputationDiD:
         est = ImputationDiD()
         with pytest.raises(ValueError, match="Missing columns"):
             est.fit(
-                data, outcome="outcome", unit="unit",
-                time="time", first_treat="nonexistent",
+                data,
+                outcome="outcome",
+                unit="unit",
+                time="time",
+                first_treat="nonexistent",
             )
 
     def test_significance_properties(self):
@@ -400,8 +460,11 @@ class TestImputationDiD:
         data = generate_test_data(treatment_effect=5.0)
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         assert results.is_significant
@@ -412,8 +475,11 @@ class TestImputationDiD:
         data = generate_test_data()
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         r = repr(results)
@@ -424,7 +490,11 @@ class TestImputationDiD:
         """Test imputation_did convenience function."""
         data = generate_test_data()
         results = imputation_did(
-            data, "outcome", "unit", "time", "first_treat",
+            data,
+            "outcome",
+            "unit",
+            "time",
+            "first_treat",
             aggregate="event_study",
         )
 
@@ -435,7 +505,11 @@ class TestImputationDiD:
         """Test imputation_did passes kwargs to constructor."""
         data = generate_test_data()
         results = imputation_did(
-            data, "outcome", "unit", "time", "first_treat",
+            data,
+            "outcome",
+            "unit",
+            "time",
+            "first_treat",
             alpha=0.10,
         )
 
@@ -452,8 +526,11 @@ class TestImputationDiD:
 
         est = ImputationDiD()
         results = est.fit(
-            data_unbal, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data_unbal,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         assert results.overall_att is not None
@@ -473,8 +550,11 @@ class TestImputationDiDResults:
         data = generate_test_data(dynamic_effects=False, seed=77, n_units=200)
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         pt = results.pretrend_test()
@@ -501,21 +581,48 @@ class TestImputationDiDResults:
 
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         pt = results.pretrend_test()
         # With pre-trend violation, should reject (low p-value)
         assert pt["p_value"] < 0.10
 
+    def test_pretrend_unbalanced_panel(self):
+        """Test pretrend_test uses iterative demeaning for unbalanced panels."""
+        data = generate_test_data(dynamic_effects=False, seed=77, n_units=200)
+        # Make unbalanced by dropping ~15% of observations
+        rng = np.random.default_rng(77)
+        keep = rng.random(len(data)) > 0.15
+        data_unbal = data[keep].reset_index(drop=True)
+
+        est = ImputationDiD()
+        results = est.fit(
+            data_unbal,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
+        )
+        pt = results.pretrend_test()
+        assert pt["n_leads"] > 0
+        # Under parallel trends, should not reject
+        assert pt["p_value"] > 0.01
+
     def test_pretrend_n_leads(self):
         """Test pre-trend test with specified number of leads."""
         data = generate_test_data(n_units=200, seed=55)
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         pt = results.pretrend_test(n_leads=2)
@@ -535,8 +642,11 @@ class TestImputationVariance:
         data = generate_test_data()
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         assert results.overall_se > 0
@@ -546,8 +656,11 @@ class TestImputationVariance:
         data = generate_test_data()
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
             aggregate="event_study",
         )
 
@@ -560,8 +673,11 @@ class TestImputationVariance:
         data = generate_test_data()
         est = ImputationDiD(aux_partition="cohort_horizon")
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
         assert results.overall_se > 0
 
@@ -570,8 +686,11 @@ class TestImputationVariance:
         data = generate_test_data()
         est = ImputationDiD(aux_partition="cohort")
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
         assert results.overall_se > 0
 
@@ -580,8 +699,11 @@ class TestImputationVariance:
         data = generate_test_data()
         est = ImputationDiD(aux_partition="horizon")
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
         assert results.overall_se > 0
 
@@ -591,14 +713,20 @@ class TestImputationVariance:
 
         est_fine = ImputationDiD(aux_partition="cohort_horizon")
         results_fine = est_fine.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         est_coarse = ImputationDiD(aux_partition="cohort")
         results_coarse = est_coarse.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         # Coarser partition should give >= SE (approximately)
@@ -625,8 +753,11 @@ class TestImputationBootstrap:
         n_boot = ci_params.bootstrap(50)
         est = ImputationDiD(n_bootstrap=n_boot, seed=42)
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         assert results.bootstrap_results is not None
@@ -640,12 +771,10 @@ class TestImputationBootstrap:
         n_boot = ci_params.bootstrap(50)
 
         est1 = ImputationDiD(n_bootstrap=n_boot, seed=42)
-        r1 = est1.fit(data, outcome="outcome", unit="unit",
-                       time="time", first_treat="first_treat")
+        r1 = est1.fit(data, outcome="outcome", unit="unit", time="time", first_treat="first_treat")
 
         est2 = ImputationDiD(n_bootstrap=n_boot, seed=42)
-        r2 = est2.fit(data, outcome="outcome", unit="unit",
-                       time="time", first_treat="first_treat")
+        r2 = est2.fit(data, outcome="outcome", unit="unit", time="time", first_treat="first_treat")
 
         assert r1.overall_se == r2.overall_se
 
@@ -655,12 +784,10 @@ class TestImputationBootstrap:
         n_boot = ci_params.bootstrap(50)
 
         est1 = ImputationDiD(n_bootstrap=n_boot, seed=42)
-        r1 = est1.fit(data, outcome="outcome", unit="unit",
-                       time="time", first_treat="first_treat")
+        r1 = est1.fit(data, outcome="outcome", unit="unit", time="time", first_treat="first_treat")
 
         est2 = ImputationDiD(n_bootstrap=n_boot, seed=99)
-        r2 = est2.fit(data, outcome="outcome", unit="unit",
-                       time="time", first_treat="first_treat")
+        r2 = est2.fit(data, outcome="outcome", unit="unit", time="time", first_treat="first_treat")
 
         # Results should differ (at least slightly)
         assert r1.overall_se != r2.overall_se
@@ -671,8 +798,11 @@ class TestImputationBootstrap:
         n_boot = ci_params.bootstrap(50)
         est = ImputationDiD(n_bootstrap=n_boot, seed=42)
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
             aggregate="event_study",
         )
 
@@ -686,8 +816,11 @@ class TestImputationBootstrap:
         n_boot = ci_params.bootstrap(50)
         est = ImputationDiD(n_bootstrap=n_boot, seed=42)
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
             aggregate="group",
         )
 
@@ -695,14 +828,67 @@ class TestImputationBootstrap:
         assert br.group_ses is not None
         assert len(br.group_ses) == 3
 
+    def test_bootstrap_balance_e_consistency(self, ci_params):
+        """Test bootstrap event study respects balance_e filtering."""
+        data = generate_test_data(n_units=150, seed=42)
+        n_boot = ci_params.bootstrap(50)
+
+        # Run WITH balance_e
+        est_bal = ImputationDiD(n_bootstrap=n_boot, seed=42)
+        results_bal = est_bal.fit(
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
+            aggregate="event_study",
+            balance_e=2,
+        )
+
+        # Run WITHOUT balance_e
+        est_nobal = ImputationDiD(n_bootstrap=n_boot, seed=42)
+        results_nobal = est_nobal.fit(
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
+            aggregate="event_study",
+        )
+
+        assert results_bal.bootstrap_results is not None
+        assert results_bal.bootstrap_results.event_study_ses is not None
+
+        # Verify SEs are finite
+        for h in results_bal.event_study_effects:
+            eff = results_bal.event_study_effects[h]
+            if eff.get("n_obs", 0) > 0 and np.isfinite(eff["effect"]):
+                if h in results_bal.bootstrap_results.event_study_ses:
+                    assert np.isfinite(results_bal.bootstrap_results.event_study_ses[h])
+
+        # Verify balance_e changed bootstrap SEs at some horizon
+        if results_nobal.bootstrap_results is not None:
+            bal_ses = results_bal.bootstrap_results.event_study_ses
+            nobal_ses = results_nobal.bootstrap_results.event_study_ses
+            shared_h = set(bal_ses.keys()) & set(nobal_ses.keys())
+            any_different = any(
+                not np.isclose(bal_ses[h], nobal_ses[h], rtol=0.05)
+                for h in shared_h
+                if np.isfinite(bal_ses[h]) and np.isfinite(nobal_ses[h])
+            )
+            assert any_different, "balance_e should change bootstrap SEs for at least one horizon"
+
     def test_bootstrap_p_value_significance(self, ci_params):
         """Test bootstrap p-value for significant effect."""
         data = generate_test_data(treatment_effect=5.0, n_units=200)
         n_boot = ci_params.bootstrap(199, min_n=99)
         est = ImputationDiD(n_bootstrap=n_boot, seed=42)
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         # Strong effect should be significant
@@ -721,19 +907,24 @@ class TestImputationVsOtherEstimators:
         """Test that point estimates are similar to CallawaySantAnna."""
         from diff_diff import CallawaySantAnna
 
-        data = generate_test_data(n_units=200, treatment_effect=2.0, seed=42,
-                                  dynamic_effects=False)
+        data = generate_test_data(n_units=200, treatment_effect=2.0, seed=42, dynamic_effects=False)
 
         imp_est = ImputationDiD()
         imp_results = imp_est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         cs = CallawaySantAnna()
         cs_results = cs.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         # Point estimates should be reasonably close
@@ -745,19 +936,24 @@ class TestImputationVsOtherEstimators:
         """Test that point estimates are similar to SunAbraham."""
         from diff_diff import SunAbraham
 
-        data = generate_test_data(n_units=200, treatment_effect=2.0, seed=42,
-                                  dynamic_effects=False)
+        data = generate_test_data(n_units=200, treatment_effect=2.0, seed=42, dynamic_effects=False)
 
         imp_est = ImputationDiD()
         imp_results = imp_est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         sa = SunAbraham()
         sa_results = sa.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         # Point estimates should be reasonably close
@@ -766,21 +962,30 @@ class TestImputationVsOtherEstimators:
     def test_shorter_cis_under_homogeneous_effects(self):
         """Under homogeneous effects, imputation CIs should be shorter."""
         data = generate_test_data(
-            n_units=300, treatment_effect=2.0, seed=42,
+            n_units=300,
+            treatment_effect=2.0,
+            seed=42,
             dynamic_effects=False,
         )
 
         imp_est = ImputationDiD()
         imp_results = imp_est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         from diff_diff import CallawaySantAnna
+
         cs = CallawaySantAnna()
         cs_results = cs.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         imp_ci_width = imp_results.overall_conf_int[1] - imp_results.overall_conf_int[0]
@@ -820,15 +1025,22 @@ class TestImputationEdgeCases:
             + rng.standard_normal(len(units)) * 0.5
         )
 
-        data = pd.DataFrame({
-            "unit": units, "time": times,
-            "outcome": outcomes, "first_treat": first_treat_exp,
-        })
+        data = pd.DataFrame(
+            {
+                "unit": units,
+                "time": times,
+                "outcome": outcomes,
+                "first_treat": first_treat_exp,
+            }
+        )
 
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         assert len(results.groups) == 1
@@ -843,8 +1055,11 @@ class TestImputationEdgeCases:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             results = est.fit(
-                data, outcome="outcome", unit="unit",
-                time="time", first_treat="first_treat",
+                data,
+                outcome="outcome",
+                unit="unit",
+                time="time",
+                first_treat="first_treat",
                 aggregate="event_study",
             )
 
@@ -854,7 +1069,8 @@ class TestImputationEdgeCases:
 
         # Proposition 5: long-run horizons should be NaN
         prop5_nans = [
-            h for h, eff in results.event_study_effects.items()
+            h
+            for h, eff in results.event_study_effects.items()
             if np.isnan(eff["effect"]) and eff.get("n_obs", 0) > 0
         ]
         assert len(prop5_nans) > 0, "Should have Prop 5 NaN horizons"
@@ -889,15 +1105,22 @@ class TestImputationEdgeCases:
             + rng.standard_normal(len(units)) * 0.5
         )
 
-        data = pd.DataFrame({
-            "unit": units, "time": times,
-            "outcome": outcomes, "first_treat": first_treat_exp,
-        })
+        data = pd.DataFrame(
+            {
+                "unit": units,
+                "time": times,
+                "outcome": outcomes,
+                "first_treat": first_treat_exp,
+            }
+        )
 
         est = ImputationDiD()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
 
         assert abs(results.overall_att - 3.0) < 1.0
@@ -907,8 +1130,11 @@ class TestImputationEdgeCases:
         data = generate_test_data()
         est = ImputationDiD(rank_deficient_action="warn")
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
         assert results.overall_se > 0
 
@@ -918,8 +1144,11 @@ class TestImputationEdgeCases:
         # Should work fine on good data
         data = generate_test_data()
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
         assert results.overall_se > 0
 
@@ -939,12 +1168,12 @@ class TestImputationEdgeCases:
 
         first_treat = np.zeros(n_units, dtype=int)
         first_treat[10:20] = 0  # period 0 = always treated
-        first_treat[20:] = 3    # treated at period 3
+        first_treat[20:] = 3  # treated at period 3
 
         # Make some units treated in all periods
         first_treat[10:20] = 0  # Never treated (actually)
         # To make always-treated: first_treat <= min_time (0)
-        first_treat[0:5] = 0    # These are never-treated
+        first_treat[0:5] = 0  # These are never-treated
         first_treat[5:10] = -1  # Treated before panel starts!
 
         first_treat_exp = np.repeat(first_treat, n_periods)
@@ -959,7 +1188,7 @@ class TestImputationEdgeCases:
         # Fix: first_treat with -1 won't trigger the never_treated check properly
         # Let's use first_treat = 0 for some units to trigger always-treated
         first_treat_2 = np.zeros(n_units, dtype=int)
-        first_treat_2[:10] = 0    # never treated
+        first_treat_2[:10] = 0  # never treated
         first_treat_2[10:15] = 0  # also never treated (we need >= 1 always-treated)
         first_treat_2[15:] = 3
         # Actually, to trigger always-treated, we need first_treat <= min(time) = 0
@@ -970,7 +1199,7 @@ class TestImputationEdgeCases:
         times_shifted = np.tile(np.arange(1, n_periods + 1), n_units)
 
         first_treat_3 = np.zeros(n_units, dtype=int)
-        first_treat_3[:10] = 0   # never treated
+        first_treat_3[:10] = 0  # never treated
         first_treat_3[10:15] = 1  # treated from the very beginning (always treated)
         first_treat_3[15:] = 4
 
@@ -983,17 +1212,24 @@ class TestImputationEdgeCases:
             + rng.standard_normal(len(units)) * 0.5
         )
 
-        data = pd.DataFrame({
-            "unit": units, "time": times_shifted,
-            "outcome": outcomes_3, "first_treat": first_treat_exp_3,
-        })
+        data = pd.DataFrame(
+            {
+                "unit": units,
+                "time": times_shifted,
+                "outcome": outcomes_3,
+                "first_treat": first_treat_exp_3,
+            }
+        )
 
         est = ImputationDiD()
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             results = est.fit(
-                data, outcome="outcome", unit="unit",
-                time="time", first_treat="first_treat",
+                data,
+                outcome="outcome",
+                unit="unit",
+                time="time",
+                first_treat="first_treat",
             )
 
         # Should have issued a warning about always-treated
@@ -1010,8 +1246,11 @@ class TestImputationEdgeCases:
         est = ImputationDiD()
         with pytest.raises(ValueError, match="No treated"):
             est.fit(
-                data, outcome="outcome", unit="unit",
-                time="time", first_treat="first_treat",
+                data,
+                outcome="outcome",
+                unit="unit",
+                time="time",
+                first_treat="first_treat",
             )
 
     def test_nan_propagation_all_nan_horizon(self):
@@ -1022,8 +1261,11 @@ class TestImputationEdgeCases:
         with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             results = est.fit(
-                data, outcome="outcome", unit="unit",
-                time="time", first_treat="first_treat",
+                data,
+                outcome="outcome",
+                unit="unit",
+                time="time",
+                first_treat="first_treat",
                 aggregate="event_study",
             )
 
@@ -1055,17 +1297,25 @@ class TestImputationEdgeCases:
                 y = rng.standard_normal() + i * 0.1 + t * 0.05
                 if t >= ft:
                     y += 1.0  # treatment effect
-                rows.append({
-                    "unit": i, "time": t, "outcome": y, "first_treat": ft,
-                })
+                rows.append(
+                    {
+                        "unit": i,
+                        "time": t,
+                        "outcome": y,
+                        "first_treat": ft,
+                    }
+                )
         data = pd.DataFrame(rows)
 
         est = ImputationDiD(rank_deficient_action="warn")
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             results = est.fit(
-                data, outcome="outcome", unit="unit",
-                time="time", first_treat="first_treat",
+                data,
+                outcome="outcome",
+                unit="unit",
+                time="time",
+                first_treat="first_treat",
                 aggregate="event_study",
             )
             rank_warnings = [x for x in w if "Rank condition" in str(x.message)]
@@ -1074,7 +1324,8 @@ class TestImputationEdgeCases:
         # Affected horizons should have NaN effects (periods with no untreated units)
         if results.event_study_effects:
             nan_effects = [
-                h for h, d in results.event_study_effects.items()
+                h
+                for h, d in results.event_study_effects.items()
                 if np.isnan(d["effect"]) and d.get("n_obs", 1) > 0
             ]
             assert len(nan_effects) > 0, "Some horizons should have NaN effects"
@@ -1091,16 +1342,24 @@ class TestImputationEdgeCases:
                 y = rng.standard_normal() + i * 0.1 + t * 0.05
                 if t >= ft:
                     y += 1.0
-                rows.append({
-                    "unit": i, "time": t, "outcome": y, "first_treat": ft,
-                })
+                rows.append(
+                    {
+                        "unit": i,
+                        "time": t,
+                        "outcome": y,
+                        "first_treat": ft,
+                    }
+                )
         data = pd.DataFrame(rows)
 
         est = ImputationDiD(rank_deficient_action="error")
         with pytest.raises(ValueError, match="Rank condition"):
             est.fit(
-                data, outcome="outcome", unit="unit",
-                time="time", first_treat="first_treat",
+                data,
+                outcome="outcome",
+                unit="unit",
+                time="time",
+                first_treat="first_treat",
             )
 
     def test_bootstrap_cluster_not_unit(self, ci_params):
@@ -1113,8 +1372,11 @@ class TestImputationEdgeCases:
         n_boot = ci_params.bootstrap(99, min_n=49)
         est = ImputationDiD(cluster="cluster_id", n_bootstrap=n_boot, seed=42)
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
         assert results.bootstrap_results is not None
         assert results.bootstrap_results.overall_att_se > 0
@@ -1122,8 +1384,11 @@ class TestImputationEdgeCases:
         # Bootstrap SE with cluster should differ from unit-level bootstrap
         est_unit = ImputationDiD(n_bootstrap=n_boot, seed=42)
         results_unit = est_unit.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
         )
         assert (
             results.bootstrap_results.overall_att_se
@@ -1136,8 +1401,11 @@ class TestImputationEdgeCases:
         est = ImputationDiD(cluster="nonexistent_col")
         with pytest.raises(ValueError, match="not found"):
             est.fit(
-                data, outcome="outcome", unit="unit",
-                time="time", first_treat="first_treat",
+                data,
+                outcome="outcome",
+                unit="unit",
+                time="time",
+                first_treat="first_treat",
             )
 
     def test_plot_reference_with_anticipation(self):
@@ -1145,8 +1413,11 @@ class TestImputationEdgeCases:
         data = generate_test_data(n_units=100, n_periods=10, seed=42)
         est = ImputationDiD(anticipation=1)
         results = est.fit(
-            data, outcome="outcome", unit="unit",
-            time="time", first_treat="first_treat",
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
             aggregate="event_study",
         )
         # Reference should be at -2 (= -1 - anticipation)
@@ -1156,8 +1427,82 @@ class TestImputationEdgeCases:
         # Test that plot_event_study auto-detects it
         pytest.importorskip("matplotlib")
         from diff_diff import plot_event_study
+
         fig = plot_event_study(results)
         assert fig is not None
+
+    def test_overall_se_with_partial_nan_tau_hat(self):
+        """Test overall SE uses finite-only weights when some tau_hat are NaN."""
+        # Create staggered data: cohort A treated at t=2, cohort B never-treated
+        # but drop all never-treated obs at t=5, so t=5 time FE is unidentified
+        # -> tau_hat for (cohort A, t=5) will be NaN
+        rng = np.random.default_rng(42)
+        n_units, n_periods = 40, 6
+        rows = []
+        for i in range(n_units):
+            if i < 20:
+                ft = 2  # early-treated
+            else:
+                ft = 99  # never-treated
+            for t in range(n_periods):
+                # Drop never-treated at t=5 to create unidentified time FE
+                if ft == 99 and t == 5:
+                    continue
+                y = rng.standard_normal() + i * 0.1 + t * 0.05
+                if t >= ft:
+                    y += 1.0
+                rows.append(
+                    {
+                        "unit": i,
+                        "time": t,
+                        "outcome": y,
+                        "first_treat": ft,
+                    }
+                )
+        data = pd.DataFrame(rows)
+
+        est = ImputationDiD(rank_deficient_action="silent")
+        results = est.fit(
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
+        )
+
+        tau_hat = results.treatment_effects["tau_hat"]
+        n_nan = tau_hat.isna().sum()
+        n_finite = tau_hat.notna().sum()
+
+        # Verify the scenario actually produces partial NaN
+        assert n_nan > 0, "Expected some NaN tau_hat (missing time FE at t=5)"
+        assert n_finite > 0, "Expected some finite tau_hat"
+
+        # Partial NaN case: SE should be finite (computed from finite-only weights)
+        assert np.isfinite(
+            results.overall_se
+        ), f"overall_se should be finite with {n_finite} finite and {n_nan} NaN tau_hat"
+        assert np.isfinite(results.overall_att)
+
+    def test_iterative_demean_balanced_matches_one_pass(self):
+        """Test _iterative_demean matches one-pass for balanced panels."""
+        rng = np.random.default_rng(42)
+        n_units, n_periods = 20, 5
+        units = np.repeat(np.arange(n_units), n_periods)
+        times = np.tile(np.arange(n_periods), n_units)
+        vals = rng.standard_normal(n_units * n_periods)
+        idx = pd.RangeIndex(len(vals))
+
+        result_iter = ImputationDiD._iterative_demean(vals, units, times, idx)
+
+        # One-pass for balanced panel
+        s = pd.DataFrame({"val": vals, "unit": units, "time": times})
+        gm = s["val"].mean()
+        um = s.groupby("unit")["val"].transform("mean").values
+        tm = s.groupby("time")["val"].transform("mean").values
+        result_onepass = vals - um - tm + gm
+
+        np.testing.assert_allclose(result_iter, result_onepass, atol=1e-8)
 
     def test_unbalanced_panel_fe_correctness(self):
         """Test FE estimates match OLS for unbalanced panel."""
@@ -1174,10 +1519,14 @@ class TestImputationEdgeCases:
                 if rng.random() < 0.2:
                     continue
                 y = unit_fe_true[i] + time_fe_true[t] + rng.standard_normal() * 0.01
-                rows.append({
-                    "unit": i, "time": t, "outcome": y,
-                    "first_treat": n_periods,  # all never-treated -> Omega_0
-                })
+                rows.append(
+                    {
+                        "unit": i,
+                        "time": t,
+                        "outcome": y,
+                        "first_treat": n_periods,  # all never-treated -> Omega_0
+                    }
+                )
 
         df_0 = pd.DataFrame(rows)
 
