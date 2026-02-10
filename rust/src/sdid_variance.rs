@@ -63,8 +63,10 @@ fn column_means(matrix: &Array2<f64>, col_indices: &[usize]) -> Array1<f64> {
 ///
 /// Matches `compute_sdid_estimator` in Python's `utils.py:1587-1604`:
 ///
-///     τ̂ = (Ȳ_treated,post - Σ_t λ_t * Y_treated,t)
-///         - Σ_j ω_j * (Ȳ_j,post - Σ_t λ_t * Y_j,t)
+/// ```text
+/// τ̂ = (Ȳ_treated,post - Σ_t λ_t * Y_treated,t)
+///     - Σ_j ω_j * (Ȳ_j,post - Σ_t λ_t * Y_j,t)
+/// ```
 fn sdid_estimator_internal(
     y_pre_control: &Array2<f64>,
     y_post_control: &Array2<f64>,

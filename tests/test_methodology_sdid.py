@@ -14,6 +14,7 @@ import pytest
 from diff_diff.synthetic_did import SyntheticDiD
 from diff_diff.utils import (
     _compute_noise_level,
+    _compute_noise_level_numpy,
     _compute_regularization,
     _fw_step,
     _sc_weight_fw,
@@ -603,3 +604,129 @@ class TestDeprecatedParams:
         """Default variance_method should be 'placebo' (matching R)."""
         sdid = SyntheticDiD()
         assert sdid.variance_method == "placebo"
+
+
+class TestNoiseLevelEdgeCases:
+    """Edge case tests for _compute_noise_level_numpy."""
+
+    def test_noise_level_single_control_two_periods(self):
+        """noise_level returns 0.0 (not NaN) for 1 control, 2 pre-periods.
+
+        With shape (2, 1), first_diffs has size=1, and np.std([x], ddof=1)
+        would divide by zero → NaN. Guard ensures 0.0 is returned instead,
+        matching the Rust backend behavior.
+        """
+        Y = np.array([[1.0], [2.0]])  # (2, 1)
+        result = _compute_noise_level_numpy(Y)
+        assert result == 0.0
+        assert not np.isnan(result)
+
+    def test_noise_level_single_element_returns_zero(self):
+        """noise_level returns 0.0 when first_diffs has exactly 1 element."""
+        # (2, 1) → diff → (1, 1) → size=1 → return 0.0
+        Y = np.array([[5.0], [10.0]])
+        result = _compute_noise_level_numpy(Y)
+        assert result == 0.0
+
+    def test_noise_level_empty_returns_zero(self):
+        """noise_level returns 0.0 for single time period (no diffs possible)."""
+        Y = np.array([[1.0, 2.0, 3.0]])  # (1, 3)
+        result = _compute_noise_level_numpy(Y)
+        assert result == 0.0
+
+
+class TestPlaceboReestimation:
+    """Tests verifying placebo variance re-estimates weights (not fixed)."""
+
+    def test_placebo_reestimates_weights_not_fixed(self):
+        """Placebo variance re-estimates omega/lambda per replication (matching R).
+
+        Verifies the methodology choice: R's vcov(method='placebo') passes
+        update.omega=TRUE, update.lambda=TRUE, so weights are re-estimated
+        via Frank-Wolfe on each permutation — NOT renormalized from originals.
+
+        We verify this by comparing the actual placebo SE against a manual
+        fixed-weight computation; if they differ, re-estimation is happening.
+        """
+        # Need enough controls for placebo to work (n_control > n_treated)
+        # and enough variation for weights to differ between re-estimation
+        # and renormalization.
+        df = _make_panel(n_control=15, n_treated=2, n_pre=6, n_post=3,
+                         att=5.0, seed=123)
+        post_periods = list(range(6, 9))
+
+        # Fit SDID to get original weights and matrices
+        sdid = SyntheticDiD(variance_method="placebo", n_bootstrap=50, seed=42)
+        results = sdid.fit(
+            df,
+            outcome="outcome",
+            treatment="treated",
+            unit="unit",
+            time="period",
+            post_periods=post_periods,
+        )
+        actual_se = results.se
+
+        # Now compute a "fixed weight" placebo manually:
+        # permute controls, renormalize original omega (no Frank-Wolfe),
+        # keep original lambda unchanged.
+        rng = np.random.default_rng(42)
+
+        # Build the outcome matrix (T, N) as the estimator does
+        pivot = df.pivot(index="period", columns="unit", values="outcome")
+        control_units = sorted(results.unit_weights.keys())
+        treated_mask = df.groupby("unit")["treated"].max().values.astype(bool)
+        control_idx = np.where(~treated_mask)[0]
+        treated_idx = np.where(treated_mask)[0]
+        Y = pivot.values  # (T, N)
+        pre_periods_arr = np.array(post_periods)
+        pre_mask = ~np.isin(pivot.index.values, pre_periods_arr)
+
+        Y_pre_control = Y[np.ix_(pre_mask, control_idx)]
+        Y_post_control = Y[np.ix_(~pre_mask, control_idx)]
+
+        # Extract numpy arrays from result dicts (ordered by control unit)
+        unit_weights_arr = np.array([results.unit_weights[u] for u in control_units])
+        time_weights_arr = np.array([results.time_weights[t]
+                                     for t in sorted(results.time_weights.keys())])
+
+        n_control = len(control_idx)
+        n_treated_count = len(treated_idx)
+        n_pseudo_control = n_control - n_treated_count
+
+        fixed_estimates = []
+        for _ in range(50):
+            perm = rng.permutation(n_control)
+            pc_idx = perm[:n_pseudo_control]
+            pt_idx = perm[n_pseudo_control:]
+
+            # Fixed weights: renormalize original omega for pseudo-controls
+            fixed_omega = _sum_normalize(unit_weights_arr[pc_idx])
+            fixed_lambda = time_weights_arr  # unchanged
+
+            Y_pre_pc = Y_pre_control[:, pc_idx]
+            Y_post_pc = Y_post_control[:, pc_idx]
+            Y_pre_pt_mean = np.mean(Y_pre_control[:, pt_idx], axis=1)
+            Y_post_pt_mean = np.mean(Y_post_control[:, pt_idx], axis=1)
+
+            try:
+                tau = compute_sdid_estimator(
+                    Y_pre_pc, Y_post_pc,
+                    Y_pre_pt_mean, Y_post_pt_mean,
+                    fixed_omega, fixed_lambda,
+                )
+                fixed_estimates.append(tau)
+            except (ValueError, np.linalg.LinAlgError):
+                continue
+
+        if len(fixed_estimates) >= 2:
+            n_s = len(fixed_estimates)
+            fixed_se = (np.sqrt((n_s - 1) / n_s)
+                        * np.std(fixed_estimates, ddof=1))
+            # The two SEs should differ because re-estimation produces
+            # different weights than renormalization
+            assert actual_se != pytest.approx(fixed_se, rel=0.01), (
+                f"Placebo SE ({actual_se:.6f}) matches fixed-weight SE "
+                f"({fixed_se:.6f}), suggesting weights are NOT being "
+                f"re-estimated as R's synthdid does."
+            )

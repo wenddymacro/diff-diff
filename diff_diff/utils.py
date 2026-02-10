@@ -1196,7 +1196,7 @@ def _compute_noise_level_numpy(Y_pre_control: np.ndarray) -> float:
     # R: apply(Y[1:N0, 1:T0], 1, diff) computes diff per row (unit).
     # Our matrix is (T, N) so diff along axis=0 gives (T-1, N).
     first_diffs = np.diff(Y_pre_control, axis=0)  # (T_pre-1, N_co)
-    if first_diffs.size == 0:
+    if first_diffs.size <= 1:
         return 0.0
     return float(np.std(first_diffs, ddof=1))
 

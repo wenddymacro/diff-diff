@@ -140,7 +140,6 @@ class SyntheticDiD(DifferenceInDifferences):
         # Deprecated — accepted for backward compat, ignored with warning
         lambda_reg: Optional[float] = None,
         zeta: Optional[float] = None,
-        **kwargs,
     ):
         if lambda_reg is not None:
             warnings.warn(

@@ -3071,6 +3071,11 @@ class TestSyntheticDiD:
         assert np.isfinite(results.att)
         assert results.se > 0
 
+    def test_unknown_kwargs_rejected(self):
+        """Unknown kwargs raise TypeError instead of being silently swallowed."""
+        with pytest.raises(TypeError):
+            SyntheticDiD(bogus_param=True)
+
 
 class TestSyntheticWeightsUtils:
     """Tests for synthetic weight utility functions."""

@@ -622,19 +622,20 @@ step = clip(step, 0, 1)
 x_new = x + step × d_x
 ```
 
-Convergence criterion: stop when objective decrease < min_decrease² (default min_decrease=1e-3).
+Convergence criterion: stop when objective decrease < min_decrease² (default min_decrease = 1e-5 × noise_level, max_iter = 10000, max_iter_pre_sparsify = 100).
 
 *Standard errors:*
 
 - Default: Placebo variance estimator (Algorithm 4 in paper)
   1. Randomly permute control unit indices
   2. Split into pseudo-controls (first N_co - N_tr) and pseudo-treated (last N_tr)
-  3. Renormalize original unit weights for pseudo-controls: `ω_pseudo = _sum_normalize(ω[pseudo_control_idx])`
-  4. Compute SDID estimate with renormalized weights and **fixed** time weights (no re-estimation)
-  5. Repeat `replications` times (default 200)
-  6. `SE = sqrt((r-1)/r) × sd(placebo_estimates)` where r = number of successful replications
+  3. Re-estimate unit weights (Frank-Wolfe) on pseudo-control/pseudo-treated data
+  4. Re-estimate time weights (Frank-Wolfe) on pseudo-control data
+  5. Compute SDID estimate with re-estimated weights
+  6. Repeat `replications` times (default 200)
+  7. `SE = sqrt((r-1)/r) × sd(placebo_estimates)` where r = number of successful replications
 
-  This matches R's `synthdid::vcov(method="placebo")`.
+  This matches R's `synthdid::vcov(method="placebo")` which passes `update.omega=TRUE, update.lambda=TRUE` via `opts`.
 
 - Alternative: Bootstrap at unit level (matching R's `synthdid::vcov(method="bootstrap")`)
   1. Resample ALL units (control + treated) with replacement
@@ -670,6 +671,7 @@ Convergence criterion: stop when objective decrease < min_decrease² (default mi
 - [x] Auto-regularization: noise_level = sd(first_diffs), zeta_omega = (N1*T1)^0.25 * noise_level, zeta_lambda = 1e-6 * noise_level
 - [x] Sparsification: v[v <= max(v)/4] = 0; v = v/sum(v)
 - [x] Placebo SE formula: sqrt((r-1)/r) * sd(placebo_estimates)
+- [x] Placebo SE: re-estimates omega and lambda per replication (matching R's update.omega=TRUE, update.lambda=TRUE)
 - [x] Bootstrap: fixed weights (original lambda unchanged, omega renormalized for resampled controls)
 - [x] Returns both unit and time weights for interpretation
 - [x] Column centering (intercept=True) in Frank-Wolfe optimization
