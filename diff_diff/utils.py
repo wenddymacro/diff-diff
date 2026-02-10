@@ -1651,7 +1651,21 @@ def compute_placebo_effects(
     For each control unit j, we pretend it was treated and compute
     the SDID estimate using the remaining controls. The distribution
     of these placebo effects provides a reference for inference.
+
+    .. deprecated::
+        This function uses legacy projected-gradient weights and fixed time
+        weights. Use ``SyntheticDiD(variance_method='placebo')`` instead.
     """
+    warnings.warn(
+        "compute_placebo_effects uses legacy projected-gradient weights and "
+        "fixed time weights, which does not match the SDID methodology "
+        "(Algorithm 4 requires re-estimating both omega and lambda per "
+        "placebo iteration). Use SyntheticDiD(variance_method='placebo') "
+        "for correct placebo inference. This function will be removed in a "
+        "future version.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     n_pre, n_control = Y_pre_control.shape
 
     if n_placebo is None:

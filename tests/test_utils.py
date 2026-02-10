@@ -973,14 +973,15 @@ class TestComputePlaceboEffects:
 
         control_units = list(control_pivot.columns)
 
-        placebo_effects = compute_placebo_effects(
-            Y_pre_control,
-            Y_post_control,
-            Y_pre_treated,
-            unit_weights,
-            time_weights,
-            control_units
-        )
+        with pytest.warns(DeprecationWarning, match="compute_placebo_effects uses legacy"):
+            placebo_effects = compute_placebo_effects(
+                Y_pre_control,
+                Y_post_control,
+                Y_pre_treated,
+                unit_weights,
+                time_weights,
+                control_units
+            )
 
         # Should have one placebo effect per control unit
         assert len(placebo_effects) == len(control_units)
@@ -1005,14 +1006,15 @@ class TestComputePlaceboEffects:
 
         control_units = list(control_pivot.columns)
 
-        placebo_effects = compute_placebo_effects(
-            Y_pre_control,
-            Y_post_control,
-            Y_pre_treated,
-            unit_weights,
-            time_weights,
-            control_units
-        )
+        with pytest.warns(DeprecationWarning, match="compute_placebo_effects uses legacy"):
+            placebo_effects = compute_placebo_effects(
+                Y_pre_control,
+                Y_post_control,
+                Y_pre_treated,
+                unit_weights,
+                time_weights,
+                control_units
+            )
 
         # Placebo effects should be centered around zero (no treatment)
         assert np.abs(np.mean(placebo_effects)) < 2.0  # Allow some deviation
@@ -1037,15 +1039,16 @@ class TestComputePlaceboEffects:
 
         control_units = list(control_pivot.columns)
 
-        placebo_effects = compute_placebo_effects(
-            Y_pre_control,
-            Y_post_control,
-            Y_pre_treated,
-            unit_weights,
-            time_weights,
-            control_units,
-            n_placebo=5
-        )
+        with pytest.warns(DeprecationWarning, match="compute_placebo_effects uses legacy"):
+            placebo_effects = compute_placebo_effects(
+                Y_pre_control,
+                Y_post_control,
+                Y_pre_treated,
+                unit_weights,
+                time_weights,
+                control_units,
+                n_placebo=5
+            )
 
         assert len(placebo_effects) == 5
 

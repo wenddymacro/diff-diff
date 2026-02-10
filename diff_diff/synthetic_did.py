@@ -737,8 +737,8 @@ class SyntheticDiD(DifferenceInDifferences):
 
         1. Randomly sample N₀ control indices (permutation)
         2. Designate last N₁ as pseudo-treated, first (N₀-N₁) as pseudo-controls
-        3. Re-estimate both omega and lambda on the permuted data (using
-           original weights as initialization), matching R's behavior where
+        3. Re-estimate both omega and lambda on the permuted data (from
+           uniform initialization, fresh start), matching R's behavior where
            ``update.omega=TRUE, update.lambda=TRUE`` are passed via ``opts``
         4. Compute SDID estimate with re-estimated weights
         5. Repeat `replications` times
