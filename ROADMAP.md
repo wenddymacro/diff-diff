@@ -8,7 +8,7 @@ For past changes and release history, see [CHANGELOG.md](CHANGELOG.md).
 
 ## Current Status
 
-diff-diff v2.1.1 is a **production-ready** DiD library with feature parity with R's `did` + `HonestDiD` + `synthdid` ecosystem for core DiD analysis:
+diff-diff v2.3.0 is a **production-ready** DiD library with feature parity with R's `did` + `HonestDiD` + `synthdid` ecosystem for core DiD analysis:
 
 - **Core estimators**: Basic DiD, TWFE, MultiPeriod, Callaway-Sant'Anna, Sun-Abraham, Borusyak-Jaravel-Spiess Imputation, Synthetic DiD, Triple Difference (DDD), TROP
 - **Valid inference**: Robust SEs, cluster SEs, wild bootstrap, multiplier bootstrap, placebo-based variance
@@ -20,13 +20,9 @@ diff-diff v2.1.1 is a **production-ready** DiD library with feature parity with 
 
 ---
 
-## Near-Term Enhancements (v2.2)
+## Near-Term Enhancements (v2.4)
 
 High-value additions building on our existing foundation.
-
-### ~~Borusyak-Jaravel-Spiess Imputation Estimator~~ ✅ Implemented (v2.2)
-
-Implemented as `ImputationDiD` — see `diff_diff/imputation.py`. Includes conservative variance (Theorem 3), event study and group aggregation, pre-trend test (Equation 9), multiplier bootstrap, and Proposition 5 handling for no never-treated units.
 
 ### Gardner's Two-Stage DiD (did2s)
 
@@ -81,7 +77,7 @@ Extend the existing `TripleDifference` estimator to handle staggered adoption se
 
 ---
 
-## Medium-Term Enhancements (v2.3+)
+## Medium-Term Enhancements (v2.5+)
 
 Extending diff-diff to handle more complex settings.
 
@@ -205,11 +201,6 @@ For high-dimensional settings with many potential confounders.
 ## Infrastructure Improvements
 
 Ongoing maintenance and developer experience.
-
-### Code Quality
-
-- Consider splitting `staggered.py` (1800+ lines)
-- Consider splitting `prep.py` (now 2000+ lines with DGP functions)
 
 ### Documentation
 

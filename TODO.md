@@ -15,23 +15,6 @@ Current limitations that may affect users:
 | MultiPeriodDiD wild bootstrap not supported | `estimators.py:1068-1074` | Low | Edge case |
 | `predict()` raises NotImplementedError | `estimators.py:532-554` | Low | Rarely needed |
 
-### ~~NaN Standard Errors for Rank-Deficient Matrices~~ (RESOLVED)
-
-**Status**: Resolved in v2.2.0 with R-style rank deficiency handling.
-
-**Solution**: The OLS solver now detects rank-deficient design matrices using pivoted QR decomposition and handles them following R's `lm()` approach:
-- Warns users about dropped columns
-- Sets NaN for coefficients of linearly dependent columns
-- Computes valid SEs for identified (non-dropped) coefficients only
-- Expands vcov matrix with NaN for dropped rows/columns
-
-This is controlled by the `rank_deficient_action` parameter in `solve_ols()`:
-- `"warn"` (default): Emit warning, set NA for dropped coefficients
-- `"error"`: Raise ValueError
-- `"silent"`: No warning, but still set NA for dropped coefficients
-
----
-
 ## Code Quality
 
 ### Large Module Files
@@ -106,16 +89,6 @@ Pyright reports 282 type errors. Most are false positives from numpy/pandas type
 
 **Note:** Most errors are false positives from imprecise type stubs. Mypy config in pyproject.toml already handles these via `disable_error_code`.
 
-### ~~Rust Code Quality~~ (RESOLVED)
-
-**Status**: Resolved in v2.1.5. All Clippy warnings addressed:
-
-- [x] `rust/src/linalg.rs` - Added `#[allow(clippy::type_complexity)]` for complex return type, prefixed unused `n` with `_`
-- [x] `rust/src/trop.rs` - Added `#[allow(clippy::too_many_arguments)]` to internal functions
-- [x] `rust/src/weights.rs` - Replaced needless range loop with iterator
-
----
-
 ## Deprecated Code
 
 Deprecated parameters still present for backward compatibility:
@@ -149,8 +122,6 @@ Enhancements for `honest_did.py`:
 ## CallawaySantAnna Bootstrap Improvements
 
 - [ ] Consider aligning p-value computation with R `did` package (symmetric percentile method)
-- [x] ~~Investigate RuntimeWarnings in influence function aggregation~~
-  - ✅ Added `np.errstate` context manager in `staggered_aggregation.py` to suppress warnings during weight influence function computation
 
 ---
 
