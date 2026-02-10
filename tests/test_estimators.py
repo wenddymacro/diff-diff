@@ -2512,8 +2512,8 @@ class TestSyntheticDiD:
 
     def test_regularization_effect(self, sdid_panel_data):
         """Test that regularization affects weight dispersion."""
-        sdid_no_reg = SyntheticDiD(lambda_reg=0.0, variance_method="placebo", seed=42)
-        sdid_high_reg = SyntheticDiD(lambda_reg=10.0, variance_method="placebo", seed=42)
+        sdid_no_reg = SyntheticDiD(zeta_omega=0.01, variance_method="placebo", seed=42)
+        sdid_high_reg = SyntheticDiD(zeta_omega=100.0, variance_method="placebo", seed=42)
 
         results_no_reg = sdid_no_reg.fit(
             sdid_panel_data,
@@ -2721,20 +2721,41 @@ class TestSyntheticDiD:
         assert isinstance(results.is_significant, bool)
 
     def test_get_set_params(self):
-        """Test get_params and set_params."""
-        sdid = SyntheticDiD(lambda_reg=1.0, zeta=0.5, alpha=0.10, variance_method="placebo")
+        """Test get_params and set_params with new parameter names."""
+        sdid = SyntheticDiD(zeta_omega=1.0, zeta_lambda=0.5, alpha=0.10, variance_method="placebo")
 
         params = sdid.get_params()
-        assert params["lambda_reg"] == 1.0
-        assert params["zeta"] == 0.5
+        assert params["zeta_omega"] == 1.0
+        assert params["zeta_lambda"] == 0.5
         assert params["alpha"] == 0.10
         assert params["variance_method"] == "placebo"
 
-        sdid.set_params(lambda_reg=2.0)
-        assert sdid.lambda_reg == 2.0
+        sdid.set_params(zeta_omega=2.0)
+        assert sdid.zeta_omega == 2.0
 
         sdid.set_params(variance_method="bootstrap")
         assert sdid.variance_method == "bootstrap"
+
+    def test_deprecated_params(self):
+        """Test that old parameter names emit DeprecationWarning."""
+        import warnings as _warnings
+
+        with _warnings.catch_warnings(record=True) as w:
+            _warnings.simplefilter("always")
+            sdid = SyntheticDiD(lambda_reg=1.0, zeta=0.5)
+            dep_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
+            assert len(dep_warnings) == 2
+
+        # Deprecated params are ignored — auto-computed regularization is used
+        assert sdid.zeta_omega is None
+        assert sdid.zeta_lambda is None
+
+        # set_params with deprecated names also warns
+        with _warnings.catch_warnings(record=True) as w:
+            _warnings.simplefilter("always")
+            sdid.set_params(lambda_reg=2.0)
+            dep_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
+            assert len(dep_warnings) == 1
 
     def test_missing_unit_column(self, sdid_panel_data):
         """Test error when unit column is missing."""
@@ -3035,7 +3056,7 @@ class TestSyntheticDiD:
 
         # Use regularization to help with underdetermined system
         n_boot = ci_params.bootstrap(30)
-        sdid = SyntheticDiD(lambda_reg=1.0, n_bootstrap=n_boot, seed=42)
+        sdid = SyntheticDiD(zeta_omega=1.0, n_bootstrap=n_boot, seed=42)
 
         results = sdid.fit(
             df,
@@ -3097,22 +3118,23 @@ class TestSyntheticWeightsUtils:
         assert len(weights) == n_control
 
     def test_compute_time_weights(self):
-        """Test time weight computation."""
+        """Test time weight computation with Frank-Wolfe solver."""
         from diff_diff.utils import compute_time_weights
 
         np.random.seed(42)
         n_pre = 5
+        n_post = 3
         n_control = 10
 
-        Y_control = np.random.randn(n_pre, n_control)
-        Y_treated = np.random.randn(n_pre)
+        Y_pre = np.random.randn(n_pre, n_control)
+        Y_post = np.random.randn(n_post, n_control)
 
-        weights = compute_time_weights(Y_control, Y_treated)
+        weights = compute_time_weights(Y_pre, Y_post, zeta_lambda=0.01)
 
         # Weights should sum to 1
         assert abs(np.sum(weights) - 1.0) < 1e-6
         # Weights should be non-negative
-        assert np.all(weights >= 0)
+        assert np.all(weights >= -1e-10)
         # Should have correct length
         assert len(weights) == n_pre
 

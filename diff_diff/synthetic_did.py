@@ -13,10 +13,12 @@ from diff_diff.estimators import DifferenceInDifferences
 from diff_diff.linalg import solve_ols
 from diff_diff.results import SyntheticDiDResults
 from diff_diff.utils import (
+    _compute_regularization,
+    _sum_normalize,
     compute_confidence_interval,
     compute_p_value,
     compute_sdid_estimator,
-    compute_synthetic_weights,
+    compute_sdid_unit_weights,
     compute_time_weights,
     validate_binary,
 )
@@ -38,21 +40,20 @@ class SyntheticDiD(DifferenceInDifferences):
 
     Parameters
     ----------
-    lambda_reg : float, default=0.0
-        L2 regularization for unit weights. Larger values shrink weights
-        toward uniform. Useful when n_pre_periods < n_control_units.
-    zeta : float, default=1.0
-        Regularization for time weights. Larger values give more uniform
-        time weights (closer to standard DiD).
+    zeta_omega : float, optional
+        Regularization for unit weights. If None (default), auto-computed
+        from data as ``(N1 * T1)^(1/4) * noise_level`` matching R's synthdid.
+    zeta_lambda : float, optional
+        Regularization for time weights. If None (default), auto-computed
+        from data as ``1e-6 * noise_level`` matching R's synthdid.
     alpha : float, default=0.05
         Significance level for confidence intervals.
-    variance_method : str, default="bootstrap"
+    variance_method : str, default="placebo"
         Method for variance estimation:
-        - "bootstrap": Block bootstrap at unit level (default)
         - "placebo": Placebo-based variance matching R's synthdid::vcov(method="placebo").
-          Implements Algorithm 4 from Arkhangelsky et al. (2021): randomly permutes
-          control units, designates N₁ as pseudo-treated, renormalizes original
-          weights for remaining pseudo-controls, and computes SDID estimate.
+          Implements Algorithm 4 from Arkhangelsky et al. (2021). This is R's default.
+        - "bootstrap": Bootstrap at unit level with fixed weights matching R's
+          synthdid::vcov(method="bootstrap").
     n_bootstrap : int, default=200
         Number of replications for variance estimation. Used for both:
         - Bootstrap: Number of bootstrap samples
@@ -130,16 +131,36 @@ class SyntheticDiD(DifferenceInDifferences):
 
     def __init__(
         self,
-        lambda_reg: float = 0.0,
-        zeta: float = 1.0,
+        zeta_omega: Optional[float] = None,
+        zeta_lambda: Optional[float] = None,
         alpha: float = 0.05,
-        variance_method: str = "bootstrap",
+        variance_method: str = "placebo",
         n_bootstrap: int = 200,
-        seed: Optional[int] = None
+        seed: Optional[int] = None,
+        # Deprecated — accepted for backward compat, ignored with warning
+        lambda_reg: Optional[float] = None,
+        zeta: Optional[float] = None,
+        **kwargs,
     ):
+        if lambda_reg is not None:
+            warnings.warn(
+                "lambda_reg is deprecated and ignored. Regularization is now "
+                "auto-computed from data. Use zeta_omega to override unit weight "
+                "regularization.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        if zeta is not None:
+            warnings.warn(
+                "zeta is deprecated and ignored. Use zeta_lambda to override "
+                "time weight regularization.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
         super().__init__(robust=True, cluster=None, alpha=alpha)
-        self.lambda_reg = lambda_reg
-        self.zeta = zeta
+        self.zeta_omega = zeta_omega
+        self.zeta_lambda = zeta_lambda
         self.variance_method = variance_method
         self.n_bootstrap = n_bootstrap
         self.seed = seed
@@ -270,21 +291,36 @@ class SyntheticDiD(DifferenceInDifferences):
                 pre_periods, post_periods, treated_units, control_units
             )
 
-        # Compute unit weights (synthetic control weights)
-        # Average treated outcomes across treated units
+        # Compute auto-regularization (or use user overrides)
+        auto_zeta_omega, auto_zeta_lambda = _compute_regularization(
+            Y_pre_control, len(treated_units), len(post_periods)
+        )
+        zeta_omega = self.zeta_omega if self.zeta_omega is not None else auto_zeta_omega
+        zeta_lambda = self.zeta_lambda if self.zeta_lambda is not None else auto_zeta_lambda
+
+        # Store noise level for diagnostics
+        from diff_diff.utils import _compute_noise_level
+        noise_level = _compute_noise_level(Y_pre_control)
+
+        # Data-dependent convergence threshold (matches R's 1e-5 * noise.level)
+        min_decrease = 1e-5 * noise_level if noise_level > 0 else 1e-5
+
+        # Compute unit weights (Frank-Wolfe with sparsification)
         Y_pre_treated_mean = np.mean(Y_pre_treated, axis=1)
 
-        unit_weights = compute_synthetic_weights(
+        unit_weights = compute_sdid_unit_weights(
             Y_pre_control,
             Y_pre_treated_mean,
-            lambda_reg=self.lambda_reg
+            zeta_omega=zeta_omega,
+            min_decrease=min_decrease,
         )
 
-        # Compute time weights
+        # Compute time weights (Frank-Wolfe on collapsed form)
         time_weights = compute_time_weights(
             Y_pre_control,
-            Y_pre_treated_mean,
-            zeta=self.zeta
+            Y_post_control,
+            zeta_lambda=zeta_lambda,
+            min_decrease=min_decrease,
         )
 
         # Compute SDID estimate
@@ -306,8 +342,9 @@ class SyntheticDiD(DifferenceInDifferences):
         # Compute standard errors based on variance_method
         if self.variance_method == "bootstrap":
             se, bootstrap_estimates = self._bootstrap_se(
-                working_data, outcome, unit, time,
-                pre_periods, post_periods, treated_units, control_units
+                Y_pre_control, Y_post_control,
+                Y_pre_treated, Y_post_treated,
+                unit_weights, time_weights,
             )
             placebo_effects = bootstrap_estimates
             inference_method = "bootstrap"
@@ -321,6 +358,9 @@ class SyntheticDiD(DifferenceInDifferences):
                 unit_weights,
                 time_weights,
                 n_treated=len(treated_units),
+                zeta_omega=zeta_omega,
+                zeta_lambda=zeta_lambda,
+                min_decrease=min_decrease,
                 replications=self.n_bootstrap  # Reuse n_bootstrap for replications
             )
             inference_method = "placebo"
@@ -336,11 +376,14 @@ class SyntheticDiD(DifferenceInDifferences):
             else:
                 p_value = compute_p_value(t_stat)
         else:
-            t_stat = 0.0
-            p_value = 1.0
+            t_stat = np.nan
+            p_value = np.nan
 
         # Confidence interval
-        conf_int = compute_confidence_interval(att, se, self.alpha)
+        if se > 0:
+            conf_int = compute_confidence_interval(att, se, self.alpha)
+        else:
+            conf_int = (np.nan, np.nan)
 
         # Create weight dictionaries
         unit_weights_dict = {
@@ -366,7 +409,9 @@ class SyntheticDiD(DifferenceInDifferences):
             post_periods=post_periods,
             alpha=self.alpha,
             variance_method=inference_method,
-            lambda_reg=self.lambda_reg,
+            noise_level=noise_level,
+            zeta_omega=zeta_omega,
+            zeta_lambda=zeta_lambda,
             pre_treatment_fit=pre_fit_rmse,
             placebo_effects=placebo_effects if len(placebo_effects) > 0 else None,
             n_bootstrap=self.n_bootstrap if inference_method == "bootstrap" else None
@@ -455,78 +500,132 @@ class SyntheticDiD(DifferenceInDifferences):
 
     def _bootstrap_se(
         self,
-        data: pd.DataFrame,
-        outcome: str,
-        unit: str,
-        time: str,
-        pre_periods: List[Any],
-        post_periods: List[Any],
-        treated_units: List[Any],
-        control_units: List[Any]
+        Y_pre_control: np.ndarray,
+        Y_post_control: np.ndarray,
+        Y_pre_treated: np.ndarray,
+        Y_post_treated: np.ndarray,
+        unit_weights: np.ndarray,
+        time_weights: np.ndarray,
     ) -> Tuple[float, np.ndarray]:
-        """
-        Compute bootstrap standard error.
+        """Compute bootstrap standard error matching R's synthdid bootstrap_sample.
 
-        Uses block bootstrap at the unit level.
+        Resamples all units (control + treated) with replacement, renormalizes
+        original unit weights for the resampled controls, and computes the
+        SDID estimator with **fixed** weights (no re-estimation).
+
+        This matches R's ``synthdid::vcov(method="bootstrap")``.
         """
         rng = np.random.default_rng(self.seed)
+        n_control = Y_pre_control.shape[1]
+        n_treated = Y_pre_treated.shape[1]
+        n_total = n_control + n_treated
 
-        all_units = treated_units + control_units
-        n_units = len(all_units)
+        # Build full panel matrix: (n_pre+n_post, n_control+n_treated)
+        Y_full = np.block([
+            [Y_pre_control, Y_pre_treated],
+            [Y_post_control, Y_post_treated]
+        ])
+        n_pre = Y_pre_control.shape[0]
 
+        # Try Rust parallel implementation for ~6x speedup
+        from diff_diff._backend import HAS_RUST_BACKEND, _rust_bootstrap_variance_sdid
+
+        if HAS_RUST_BACKEND and _rust_bootstrap_variance_sdid is not None:
+            # Generate random seed when self.seed is None
+            rust_seed = self.seed if self.seed is not None else int(
+                np.random.default_rng(None).integers(0, 2**63)
+            )
+
+            se, boot_arr, n_failed = _rust_bootstrap_variance_sdid(
+                np.ascontiguousarray(Y_pre_control, dtype=np.float64),
+                np.ascontiguousarray(Y_post_control, dtype=np.float64),
+                np.ascontiguousarray(Y_pre_treated, dtype=np.float64),
+                np.ascontiguousarray(Y_post_treated, dtype=np.float64),
+                np.ascontiguousarray(unit_weights, dtype=np.float64),
+                np.ascontiguousarray(time_weights, dtype=np.float64),
+                self.n_bootstrap, rust_seed,
+            )
+            bootstrap_estimates = np.asarray(boot_arr)
+            n_successful = len(bootstrap_estimates)
+            failure_rate = 1 - (n_successful / self.n_bootstrap)
+
+            # Apply same warning/error logic as Python path
+            if n_successful == 0:
+                raise ValueError(
+                    f"All {self.n_bootstrap} bootstrap iterations failed. "
+                    f"This typically occurs when:\n"
+                    f"  - Sample size is too small for reliable resampling\n"
+                    f"  - Weight matrices are singular or near-singular\n"
+                    f"  - Insufficient pre-treatment periods for weight estimation\n"
+                    f"  - Too few control units relative to treated units\n"
+                    f"Consider using variance_method='placebo' or increasing "
+                    f"the regularization parameters (zeta_omega, zeta_lambda)."
+                )
+            elif n_successful == 1:
+                warnings.warn(
+                    f"Only 1/{self.n_bootstrap} bootstrap iteration succeeded. "
+                    f"Standard error cannot be computed reliably (requires at least 2). "
+                    f"Returning SE=0.0. Consider using variance_method='placebo' or "
+                    f"increasing the regularization (zeta_omega, zeta_lambda).",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                return 0.0, bootstrap_estimates
+            elif failure_rate > 0.05:
+                warnings.warn(
+                    f"Only {n_successful}/{self.n_bootstrap} bootstrap iterations succeeded "
+                    f"({failure_rate:.1%} failure rate). Standard errors may be unreliable. "
+                    f"This can occur with small samples or insufficient pre-treatment periods.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
+            return se, bootstrap_estimates
+
+        # Python fallback
         bootstrap_estimates = []
 
         for _ in range(self.n_bootstrap):
-            # Sample units with replacement
-            sampled_units = rng.choice(all_units, size=n_units, replace=True)
+            # Resample ALL units with replacement
+            boot_idx = rng.choice(n_total, size=n_total, replace=True)
 
-            # Create bootstrap sample
-            boot_data = pd.concat([
-                data[data[unit] == u].assign(**{unit: f"{u}_{i}"})
-                for i, u in enumerate(sampled_units)
-            ], ignore_index=True)
+            # Identify which resampled units are control vs treated
+            boot_is_control = boot_idx < n_control
+            boot_control_idx = boot_idx[boot_is_control]
+            boot_treated_idx = boot_idx[~boot_is_control]
 
-            # Identify treated/control in bootstrap sample
-            boot_treated = [
-                f"{u}_{i}" for i, u in enumerate(sampled_units)
-                if u in treated_units
-            ]
-            boot_control = [
-                f"{u}_{i}" for i, u in enumerate(sampled_units)
-                if u in control_units
-            ]
-
-            if len(boot_treated) == 0 or len(boot_control) == 0:
+            # Skip if no control or no treated units in bootstrap sample
+            if len(boot_control_idx) == 0 or len(boot_treated_idx) == 0:
                 continue
 
             try:
-                # Create matrices
-                Y_pre_c, Y_post_c, Y_pre_t, Y_post_t = self._create_outcome_matrices(
-                    boot_data, outcome, unit, time,
-                    pre_periods, post_periods, boot_treated, boot_control
-                )
+                # Renormalize original unit weights for the resampled controls
+                boot_omega = _sum_normalize(unit_weights[boot_control_idx])
 
-                # Compute weights
-                Y_pre_t_mean = np.mean(Y_pre_t, axis=1)
-                Y_post_t_mean = np.mean(Y_post_t, axis=1)
+                # Extract resampled outcome matrices
+                Y_boot = Y_full[:, boot_idx]
+                Y_boot_pre_c = Y_boot[:n_pre, boot_is_control]
+                Y_boot_post_c = Y_boot[n_pre:, boot_is_control]
+                Y_boot_pre_t = Y_boot[:n_pre, ~boot_is_control]
+                Y_boot_post_t = Y_boot[n_pre:, ~boot_is_control]
 
-                w = compute_synthetic_weights(Y_pre_c, Y_pre_t_mean, self.lambda_reg)
-                t_w = compute_time_weights(Y_pre_c, Y_pre_t_mean, self.zeta)
+                # Compute ATT with FIXED weights (do NOT re-estimate)
+                Y_boot_pre_t_mean = np.mean(Y_boot_pre_t, axis=1)
+                Y_boot_post_t_mean = np.mean(Y_boot_post_t, axis=1)
 
-                # Compute estimate
                 tau = compute_sdid_estimator(
-                    Y_pre_c, Y_post_c, Y_pre_t_mean, Y_post_t_mean, w, t_w
+                    Y_boot_pre_c, Y_boot_post_c,
+                    Y_boot_pre_t_mean, Y_boot_post_t_mean,
+                    boot_omega, time_weights  # time_weights = original lambda
                 )
                 bootstrap_estimates.append(tau)
 
-            except (ValueError, LinAlgError, KeyError):
-                # Skip failed bootstrap iterations (e.g., singular matrices,
-                # missing data in resampled units, or invalid weight computations)
+            except (ValueError, LinAlgError):
                 continue
 
         bootstrap_estimates = np.array(bootstrap_estimates)
 
-        # Check bootstrap success rate and handle failures appropriately
+        # Check bootstrap success rate and handle failures
         n_successful = len(bootstrap_estimates)
         failure_rate = 1 - (n_successful / self.n_bootstrap)
 
@@ -538,16 +637,15 @@ class SyntheticDiD(DifferenceInDifferences):
                 f"  - Weight matrices are singular or near-singular\n"
                 f"  - Insufficient pre-treatment periods for weight estimation\n"
                 f"  - Too few control units relative to treated units\n"
-                f"Consider using n_bootstrap=0 to disable bootstrap inference "
-                f"and rely on placebo-based standard errors, or increase "
-                f"the regularization parameters (lambda_reg, zeta)."
+                f"Consider using variance_method='placebo' or increasing "
+                f"the regularization parameters (zeta_omega, zeta_lambda)."
             )
         elif n_successful == 1:
             warnings.warn(
                 f"Only 1/{self.n_bootstrap} bootstrap iteration succeeded. "
                 f"Standard error cannot be computed reliably (requires at least 2). "
-                f"Returning SE=0.0. Consider the suggestions above for improving "
-                f"bootstrap convergence.",
+                f"Returning SE=0.0. Consider using variance_method='placebo' or "
+                f"increasing the regularization (zeta_omega, zeta_lambda).",
                 UserWarning,
                 stacklevel=2,
             )
@@ -556,14 +654,13 @@ class SyntheticDiD(DifferenceInDifferences):
             warnings.warn(
                 f"Only {n_successful}/{self.n_bootstrap} bootstrap iterations succeeded "
                 f"({failure_rate:.1%} failure rate). Standard errors may be unreliable. "
-                f"This can occur with small samples, near-singular weight matrices, "
-                f"or insufficient pre-treatment periods.",
+                f"This can occur with small samples or insufficient pre-treatment periods.",
                 UserWarning,
                 stacklevel=2,
             )
-            se = np.std(bootstrap_estimates, ddof=1)
+            se = float(np.std(bootstrap_estimates, ddof=1))
         else:
-            se = np.std(bootstrap_estimates, ddof=1)
+            se = float(np.std(bootstrap_estimates, ddof=1))
 
         return se, bootstrap_estimates
 
@@ -576,6 +673,9 @@ class SyntheticDiD(DifferenceInDifferences):
         unit_weights: np.ndarray,
         time_weights: np.ndarray,
         n_treated: int,
+        zeta_omega: float = 0.0,
+        zeta_lambda: float = 0.0,
+        min_decrease: float = 1e-5,
         replications: int = 200
     ) -> Tuple[float, np.ndarray]:
         """
@@ -586,8 +686,10 @@ class SyntheticDiD(DifferenceInDifferences):
 
         1. Randomly sample N₀ control indices (permutation)
         2. Designate last N₁ as pseudo-treated, first (N₀-N₁) as pseudo-controls
-        3. Renormalize original unit weights for pseudo-controls
-        4. Compute SDID estimate using renormalized weights
+        3. Re-estimate both omega and lambda on the permuted data (using
+           original weights as initialization), matching R's behavior where
+           ``update.omega=TRUE, update.lambda=TRUE`` are passed via ``opts``
+        4. Compute SDID estimate with re-estimated weights
         5. Repeat `replications` times
         6. SE = sqrt((r-1)/r) * sd(estimates)
 
@@ -607,6 +709,12 @@ class SyntheticDiD(DifferenceInDifferences):
             Time weights from main estimation, shape (n_pre,).
         n_treated : int
             Number of treated units in the original estimation.
+        zeta_omega : float
+            Regularization parameter for unit weights (for re-estimation).
+        zeta_lambda : float
+            Regularization parameter for time weights (for re-estimation).
+        min_decrease : float
+            Convergence threshold for Frank-Wolfe (for re-estimation).
         replications : int, default=200
             Number of placebo replications.
 
@@ -637,6 +745,53 @@ class SyntheticDiD(DifferenceInDifferences):
             )
             return 0.0, np.array([])
 
+        # Try Rust parallel implementation for ~8x speedup
+        from diff_diff._backend import HAS_RUST_BACKEND, _rust_placebo_variance_sdid
+
+        if HAS_RUST_BACKEND and _rust_placebo_variance_sdid is not None:
+            # Generate random seed when self.seed is None (matching Python's non-reproducible behavior)
+            rust_seed = self.seed if self.seed is not None else int(
+                np.random.default_rng(None).integers(0, 2**63)
+            )
+
+            se, placebo_arr = _rust_placebo_variance_sdid(
+                np.ascontiguousarray(Y_pre_control, dtype=np.float64),
+                np.ascontiguousarray(Y_post_control, dtype=np.float64),
+                np.ascontiguousarray(Y_pre_treated_mean, dtype=np.float64),
+                np.ascontiguousarray(Y_post_treated_mean, dtype=np.float64),
+                n_treated, zeta_omega, zeta_lambda, min_decrease,
+                True,   # intercept
+                100,    # max_iter_pre_sparsify
+                10000,  # max_iter
+                replications, rust_seed,
+            )
+            placebo_estimates = np.asarray(placebo_arr)
+            n_successful = len(placebo_estimates)
+
+            # Apply same warning/error logic as Python path
+            if n_successful < 2:
+                warnings.warn(
+                    f"Only {n_successful} placebo replications completed successfully. "
+                    f"Standard error cannot be estimated reliably. "
+                    f"Consider using variance_method='bootstrap' or increasing "
+                    f"the number of control units.",
+                    UserWarning,
+                    stacklevel=3,
+                )
+                return 0.0, placebo_estimates
+
+            failure_rate = 1 - (n_successful / replications)
+            if failure_rate > 0.05:
+                warnings.warn(
+                    f"Only {n_successful}/{replications} placebo replications succeeded "
+                    f"({failure_rate:.1%} failure rate). Standard errors may be unreliable.",
+                    UserWarning,
+                    stacklevel=3,
+                )
+
+            return se, placebo_estimates
+
+        # Python fallback
         placebo_estimates = []
 
         for _ in range(replications):
@@ -648,36 +803,43 @@ class SyntheticDiD(DifferenceInDifferences):
                 pseudo_control_idx = perm[:n_pseudo_control]
                 pseudo_treated_idx = perm[n_pseudo_control:]
 
-                # Renormalize original weights for pseudo-controls (step 3)
-                # This keeps the relative importance from the main estimation
-                pseudo_weights = unit_weights[pseudo_control_idx]
-                weight_sum = pseudo_weights.sum()
-                if weight_sum > 0:
-                    pseudo_weights = pseudo_weights / weight_sum
-                else:
-                    # Fallback to uniform if weights sum to zero
-                    pseudo_weights = np.ones(n_pseudo_control) / n_pseudo_control
-
-                # Get pseudo-treated outcomes (mean across pseudo-treated units)
-                Y_pre_pseudo_treated = np.mean(
+                # Get pseudo-control and pseudo-treated outcomes
+                Y_pre_pseudo_control = Y_pre_control[:, pseudo_control_idx]
+                Y_post_pseudo_control = Y_post_control[:, pseudo_control_idx]
+                Y_pre_pseudo_treated_mean = np.mean(
                     Y_pre_control[:, pseudo_treated_idx], axis=1
                 )
-                Y_post_pseudo_treated = np.mean(
+                Y_post_pseudo_treated_mean = np.mean(
                     Y_post_control[:, pseudo_treated_idx], axis=1
                 )
 
-                # Get pseudo-control outcomes
-                Y_pre_pseudo_control = Y_pre_control[:, pseudo_control_idx]
-                Y_post_pseudo_control = Y_post_control[:, pseudo_control_idx]
+                # Re-estimate weights on permuted data (matching R's behavior)
+                # R passes update.omega=TRUE, update.lambda=TRUE via opts,
+                # using original weights as starting points for FW optimization.
+                # Unit weights: re-estimate on pseudo-control/pseudo-treated data
+                pseudo_omega = compute_sdid_unit_weights(
+                    Y_pre_pseudo_control,
+                    Y_pre_pseudo_treated_mean,
+                    zeta_omega=zeta_omega,
+                    min_decrease=min_decrease,
+                )
+
+                # Time weights: re-estimate on pseudo-control data
+                pseudo_lambda = compute_time_weights(
+                    Y_pre_pseudo_control,
+                    Y_post_pseudo_control,
+                    zeta_lambda=zeta_lambda,
+                    min_decrease=min_decrease,
+                )
 
                 # Compute placebo SDID estimate (step 4)
                 tau = compute_sdid_estimator(
                     Y_pre_pseudo_control,
                     Y_post_pseudo_control,
-                    Y_pre_pseudo_treated,
-                    Y_post_pseudo_treated,
-                    pseudo_weights,
-                    time_weights
+                    Y_pre_pseudo_treated_mean,
+                    Y_post_pseudo_treated_mean,
+                    pseudo_omega,
+                    pseudo_lambda
                 )
                 placebo_estimates.append(tau)
 
@@ -720,8 +882,8 @@ class SyntheticDiD(DifferenceInDifferences):
     def get_params(self) -> Dict[str, Any]:
         """Get estimator parameters."""
         return {
-            "lambda_reg": self.lambda_reg,
-            "zeta": self.zeta,
+            "zeta_omega": self.zeta_omega,
+            "zeta_lambda": self.zeta_lambda,
             "alpha": self.alpha,
             "variance_method": self.variance_method,
             "n_bootstrap": self.n_bootstrap,
@@ -730,8 +892,17 @@ class SyntheticDiD(DifferenceInDifferences):
 
     def set_params(self, **params) -> "SyntheticDiD":
         """Set estimator parameters."""
+        # Deprecated parameter names — emit warning and ignore
+        _deprecated = {"lambda_reg", "zeta"}
         for key, value in params.items():
-            if hasattr(self, key):
+            if key in _deprecated:
+                warnings.warn(
+                    f"{key} is deprecated and ignored. Use zeta_omega/zeta_lambda "
+                    f"instead.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+            elif hasattr(self, key):
                 setattr(self, key, value)
             else:
                 raise ValueError(f"Unknown parameter: {key}")

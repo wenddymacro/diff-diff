@@ -969,7 +969,7 @@ class TestComputePlaceboEffects:
 
         # Compute weights
         unit_weights = compute_synthetic_weights(Y_pre_control, Y_pre_treated)
-        time_weights = compute_time_weights(Y_pre_control, Y_pre_treated)
+        time_weights = compute_time_weights(Y_pre_control, Y_post_control, zeta_lambda=1e-6)
 
         control_units = list(control_pivot.columns)
 
@@ -1001,7 +1001,7 @@ class TestComputePlaceboEffects:
         Y_pre_treated = treated_mean.loc[pre_periods].values
 
         unit_weights = compute_synthetic_weights(Y_pre_control, Y_pre_treated)
-        time_weights = compute_time_weights(Y_pre_control, Y_pre_treated)
+        time_weights = compute_time_weights(Y_pre_control, Y_post_control, zeta_lambda=1e-6)
 
         control_units = list(control_pivot.columns)
 
@@ -1033,7 +1033,7 @@ class TestComputePlaceboEffects:
         Y_pre_treated = treated_mean.loc[pre_periods].values
 
         unit_weights = compute_synthetic_weights(Y_pre_control, Y_pre_treated)
-        time_weights = compute_time_weights(Y_pre_control, Y_pre_treated)
+        time_weights = compute_time_weights(Y_pre_control, Y_post_control, zeta_lambda=1e-6)
 
         control_units = list(control_pivot.columns)
 
@@ -1111,42 +1111,52 @@ class TestComputeSyntheticWeightsEdgeCases:
 
 
 class TestComputeTimeWeightsEdgeCases:
-    """Edge case tests for compute_time_weights."""
+    """Edge case tests for compute_time_weights (new Frank-Wolfe signature)."""
 
     def test_single_period(self):
         """Test with single pre-treatment period."""
-        Y_control = np.array([[1.0, 2.0, 3.0]])
-        Y_treated = np.array([2.0])
+        Y_pre_control = np.array([[1.0, 2.0, 3.0]])
+        Y_post_control = np.array([[4.0, 5.0, 6.0]])
 
-        weights = compute_time_weights(Y_control, Y_treated)
+        weights = compute_time_weights(Y_pre_control, Y_post_control, zeta_lambda=0.01)
 
         assert len(weights) == 1
         assert abs(weights[0] - 1.0) < 1e-6
 
     def test_zeta_regularization_effect(self):
-        """Test that zeta affects weight uniformity."""
+        """Test that zeta_lambda affects weight uniformity."""
         np.random.seed(42)
-        Y_control = np.random.randn(10, 5)
-        Y_treated = np.random.randn(10)
+        Y_pre = np.random.randn(10, 5)
+        Y_post = np.random.randn(3, 5)
 
-        weights_low_zeta = compute_time_weights(Y_control, Y_treated, zeta=0.1)
-        weights_high_zeta = compute_time_weights(Y_control, Y_treated, zeta=10.0)
+        weights_low = compute_time_weights(Y_pre, Y_post, zeta_lambda=0.001)
+        weights_high = compute_time_weights(Y_pre, Y_post, zeta_lambda=100.0)
 
-        # High zeta should give more uniform weights
-        var_low = np.var(weights_low_zeta)
-        var_high = np.var(weights_high_zeta)
+        # High regularization should give more uniform weights
+        var_low = np.var(weights_low)
+        var_high = np.var(weights_high)
 
         assert var_high <= var_low + 0.01
 
-    def test_weights_all_positive(self):
-        """Test that time weights are all positive."""
+    def test_weights_nonnegative(self):
+        """Test that time weights are non-negative (simplex constraint)."""
         np.random.seed(42)
-        Y_control = np.random.randn(10, 5)
-        Y_treated = np.random.randn(10)
+        Y_pre = np.random.randn(10, 5)
+        Y_post = np.random.randn(3, 5)
 
-        weights = compute_time_weights(Y_control, Y_treated)
+        weights = compute_time_weights(Y_pre, Y_post, zeta_lambda=0.01)
 
-        assert np.all(weights > 0)
+        assert np.all(weights >= -1e-10)
+
+    def test_weights_sum_to_one(self):
+        """Test that time weights sum to 1."""
+        np.random.seed(42)
+        Y_pre = np.random.randn(10, 5)
+        Y_post = np.random.randn(3, 5)
+
+        weights = compute_time_weights(Y_pre, Y_post, zeta_lambda=0.01)
+
+        assert abs(np.sum(weights) - 1.0) < 1e-6
 
 
 # =============================================================================

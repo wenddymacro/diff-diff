@@ -30,6 +30,14 @@ try:
         # TROP estimator acceleration (joint method)
         loocv_grid_search_joint as _rust_loocv_grid_search_joint,
         bootstrap_trop_variance_joint as _rust_bootstrap_trop_variance_joint,
+        # SDID weights (Frank-Wolfe matching R's synthdid)
+        compute_sdid_unit_weights as _rust_sdid_unit_weights,
+        compute_time_weights as _rust_compute_time_weights,
+        compute_noise_level as _rust_compute_noise_level,
+        sc_weight_fw as _rust_sc_weight_fw,
+        # SDID variance estimation (parallel placebo and bootstrap)
+        placebo_variance_sdid as _rust_placebo_variance_sdid,
+        bootstrap_variance_sdid as _rust_bootstrap_variance_sdid,
     )
     _rust_available = True
 except ImportError:
@@ -46,6 +54,14 @@ except ImportError:
     # TROP estimator acceleration (joint method)
     _rust_loocv_grid_search_joint = None
     _rust_bootstrap_trop_variance_joint = None
+    # SDID weights (Frank-Wolfe matching R's synthdid)
+    _rust_sdid_unit_weights = None
+    _rust_compute_time_weights = None
+    _rust_compute_noise_level = None
+    _rust_sc_weight_fw = None
+    # SDID variance estimation (parallel placebo and bootstrap)
+    _rust_placebo_variance_sdid = None
+    _rust_bootstrap_variance_sdid = None
 
 # Determine final backend based on environment variable and availability
 if _backend_env == 'python':
@@ -63,6 +79,14 @@ if _backend_env == 'python':
     # TROP estimator acceleration (joint method)
     _rust_loocv_grid_search_joint = None
     _rust_bootstrap_trop_variance_joint = None
+    # SDID weights (Frank-Wolfe matching R's synthdid)
+    _rust_sdid_unit_weights = None
+    _rust_compute_time_weights = None
+    _rust_compute_noise_level = None
+    _rust_sc_weight_fw = None
+    # SDID variance estimation (parallel placebo and bootstrap)
+    _rust_placebo_variance_sdid = None
+    _rust_bootstrap_variance_sdid = None
 elif _backend_env == 'rust':
     # Force Rust mode - fail if not available
     if not _rust_available:
@@ -89,4 +113,12 @@ __all__ = [
     # TROP estimator acceleration (joint method)
     '_rust_loocv_grid_search_joint',
     '_rust_bootstrap_trop_variance_joint',
+    # SDID weights (Frank-Wolfe matching R's synthdid)
+    '_rust_sdid_unit_weights',
+    '_rust_compute_time_weights',
+    '_rust_compute_noise_level',
+    '_rust_sc_weight_fw',
+    # SDID variance estimation (parallel placebo and bootstrap)
+    '_rust_placebo_variance_sdid',
+    '_rust_bootstrap_variance_sdid',
 ]

@@ -605,8 +605,10 @@ class SyntheticDiDResults:
     pre_periods: List[Any]
     post_periods: List[Any]
     alpha: float = 0.05
-    variance_method: str = field(default="bootstrap")
-    lambda_reg: Optional[float] = field(default=None)
+    variance_method: str = field(default="placebo")
+    noise_level: Optional[float] = field(default=None)
+    zeta_omega: Optional[float] = field(default=None)
+    zeta_lambda: Optional[float] = field(default=None)
     pre_treatment_fit: Optional[float] = field(default=None)
     placebo_effects: Optional[np.ndarray] = field(default=None)
     n_bootstrap: Optional[int] = field(default=None)
@@ -650,8 +652,12 @@ class SyntheticDiDResults:
             f"{'Post-treatment periods:':<25} {len(self.post_periods):>10}",
         ]
 
-        if self.lambda_reg is not None:
-            lines.append(f"{'Regularization (lambda):':<25} {self.lambda_reg:>10.4f}")
+        if self.zeta_omega is not None:
+            lines.append(f"{'Zeta (unit weights):':<25} {self.zeta_omega:>10.4f}")
+        if self.zeta_lambda is not None:
+            lines.append(f"{'Zeta (time weights):':<25} {self.zeta_lambda:>10.6f}")
+        if self.noise_level is not None:
+            lines.append(f"{'Noise level:':<25} {self.noise_level:>10.4f}")
 
         if self.pre_treatment_fit is not None:
             lines.append(f"{'Pre-treatment fit (RMSE):':<25} {self.pre_treatment_fit:>10.4f}")
@@ -731,7 +737,9 @@ class SyntheticDiDResults:
             "n_pre_periods": len(self.pre_periods),
             "n_post_periods": len(self.post_periods),
             "variance_method": self.variance_method,
-            "lambda_reg": self.lambda_reg,
+            "noise_level": self.noise_level,
+            "zeta_omega": self.zeta_omega,
+            "zeta_lambda": self.zeta_lambda,
             "pre_treatment_fit": self.pre_treatment_fit,
         }
         if self.n_bootstrap is not None:

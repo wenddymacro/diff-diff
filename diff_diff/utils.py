@@ -18,6 +18,10 @@ from diff_diff._backend import (
     HAS_RUST_BACKEND,
     _rust_project_simplex,
     _rust_synthetic_weights,
+    _rust_sdid_unit_weights,
+    _rust_compute_time_weights,
+    _rust_compute_noise_level,
+    _rust_sc_weight_fw,
 )
 
 # Numerical constants for optimization algorithms
@@ -1147,57 +1151,394 @@ def _project_simplex(v: np.ndarray) -> np.ndarray:
     return np.asarray(np.maximum(v - theta, 0))
 
 
-def compute_time_weights(
-    Y_control: np.ndarray,
-    Y_treated: np.ndarray,
-    zeta: float = 1.0
-) -> np.ndarray:
-    """
-    Compute time weights for synthetic DiD.
+# =============================================================================
+# SDID Weight Optimization (Frank-Wolfe, matching R's synthdid)
+# =============================================================================
 
-    Time weights emphasize pre-treatment periods where the outcome
-    is more informative for constructing the synthetic control.
-    Based on the SDID approach from Arkhangelsky et al. (2021).
+
+def _sum_normalize(v: np.ndarray) -> np.ndarray:
+    """Normalize vector to sum to 1. Fallback to uniform if sum is zero.
+
+    Matches R's synthdid ``sum_normalize()`` helper.
+    """
+    s = np.sum(v)
+    if s > 0:
+        return v / s
+    return np.ones(len(v)) / len(v)
+
+
+def _compute_noise_level(Y_pre_control: np.ndarray) -> float:
+    """Compute noise level from first-differences of control outcomes.
+
+    Matches R's ``sd(apply(Y[1:N0, 1:T0], 1, diff))`` which computes
+    first-differences across time for each control unit, then takes the
+    pooled standard deviation.
 
     Parameters
     ----------
-    Y_control : np.ndarray
-        Control unit outcomes of shape (n_pre_periods, n_control_units).
-    Y_treated : np.ndarray
-        Treated unit mean outcomes of shape (n_pre_periods,).
-    zeta : float, default=1.0
-        Regularization parameter for time weights. Higher values
-        give more uniform weights.
+    Y_pre_control : np.ndarray
+        Control unit pre-treatment outcomes, shape (n_pre, n_control).
+
+    Returns
+    -------
+    float
+        Noise level (standard deviation of first-differences).
+    """
+    if HAS_RUST_BACKEND:
+        return float(_rust_compute_noise_level(np.ascontiguousarray(Y_pre_control)))
+    return _compute_noise_level_numpy(Y_pre_control)
+
+
+def _compute_noise_level_numpy(Y_pre_control: np.ndarray) -> float:
+    """Pure NumPy implementation of noise level computation."""
+    if Y_pre_control.shape[0] < 2:
+        return 0.0
+    # R: apply(Y[1:N0, 1:T0], 1, diff) computes diff per row (unit).
+    # Our matrix is (T, N) so diff along axis=0 gives (T-1, N).
+    first_diffs = np.diff(Y_pre_control, axis=0)  # (T_pre-1, N_co)
+    if first_diffs.size == 0:
+        return 0.0
+    return float(np.std(first_diffs, ddof=1))
+
+
+def _compute_regularization(
+    Y_pre_control: np.ndarray,
+    n_treated: int,
+    n_post: int,
+) -> tuple:
+    """Compute auto-regularization parameters matching R's synthdid.
+
+    Parameters
+    ----------
+    Y_pre_control : np.ndarray
+        Control unit pre-treatment outcomes, shape (n_pre, n_control).
+    n_treated : int
+        Number of treated units.
+    n_post : int
+        Number of post-treatment periods.
+
+    Returns
+    -------
+    tuple
+        (zeta_omega, zeta_lambda) regularization parameters.
+    """
+    sigma = _compute_noise_level(Y_pre_control)
+    eta_omega = (n_treated * n_post) ** 0.25
+    eta_lambda = 1e-6
+    return eta_omega * sigma, eta_lambda * sigma
+
+
+def _fw_step(
+    A: np.ndarray,
+    x: np.ndarray,
+    b: np.ndarray,
+    eta: float,
+) -> np.ndarray:
+    """Single Frank-Wolfe step on the simplex.
+
+    Matches R's ``fw.step()`` in synthdid's ``sc.weight.fw()``.
+
+    Parameters
+    ----------
+    A : np.ndarray
+        Matrix of shape (N, T0).
+    x : np.ndarray
+        Current weight vector of shape (T0,).
+    b : np.ndarray
+        Target vector of shape (N,).
+    eta : float
+        Regularization strength (N * zeta^2).
 
     Returns
     -------
     np.ndarray
-        Time weights of shape (n_pre_periods,) that sum to 1.
-
-    Notes
-    -----
-    The time weights help interpolate between DiD (uniform weights)
-    and synthetic control (weights concentrated on similar periods).
+        Updated weight vector on the simplex.
     """
-    n_pre = len(Y_treated)
+    Ax = A @ x
+    half_grad = A.T @ (Ax - b) + eta * x
+    i = int(np.argmin(half_grad))
+    d_x = -x.copy()
+    d_x[i] += 1.0
+    if np.allclose(d_x, 0.0):
+        return x.copy()
+    d_err = A[:, i] - Ax
+    denom = d_err @ d_err + eta * (d_x @ d_x)
+    if denom <= 0:
+        return x.copy()
+    step = -(half_grad @ d_x) / denom
+    step = float(np.clip(step, 0.0, 1.0))
+    return x + step * d_x
+
+
+def _sc_weight_fw(
+    Y: np.ndarray,
+    zeta: float,
+    intercept: bool = True,
+    init_weights: Optional[np.ndarray] = None,
+    min_decrease: float = 1e-5,
+    max_iter: int = 10000,
+) -> np.ndarray:
+    """Compute synthetic control weights via Frank-Wolfe optimization.
+
+    Matches R's ``sc.weight.fw()`` from the synthdid package. Solves::
+
+        min_{lambda on simplex}  zeta^2 * ||lambda||^2
+            + (1/N) * ||A_centered @ lambda - b_centered||^2
+
+    Parameters
+    ----------
+    Y : np.ndarray
+        Matrix of shape (N, T0+1). Last column is the target (post-period
+        mean or treated pre-period mean depending on context).
+    zeta : float
+        Regularization strength.
+    intercept : bool, default True
+        If True, column-center Y before optimization.
+    init_weights : np.ndarray, optional
+        Initial weights. If None, starts with uniform weights.
+    min_decrease : float, default 1e-5
+        Convergence criterion: stop when objective decreases by less than
+        ``min_decrease**2``. R uses ``1e-5 * noise_level``; the caller
+        should pass the data-dependent value for best results.
+    max_iter : int, default 10000
+        Maximum number of iterations. Matches R's default.
+
+    Returns
+    -------
+    np.ndarray
+        Weights of shape (T0,) on the simplex.
+    """
+    if HAS_RUST_BACKEND:
+        return np.asarray(_rust_sc_weight_fw(
+            np.ascontiguousarray(Y, dtype=np.float64),
+            zeta, intercept,
+            np.ascontiguousarray(init_weights, dtype=np.float64) if init_weights is not None else None,
+            min_decrease, max_iter,
+        ))
+    return _sc_weight_fw_numpy(Y, zeta, intercept, init_weights, min_decrease, max_iter)
+
+
+def _sc_weight_fw_numpy(
+    Y: np.ndarray,
+    zeta: float,
+    intercept: bool = True,
+    init_weights: Optional[np.ndarray] = None,
+    min_decrease: float = 1e-5,
+    max_iter: int = 10000,
+) -> np.ndarray:
+    """Pure NumPy implementation of Frank-Wolfe SC weight solver."""
+    T0 = Y.shape[1] - 1
+    N = Y.shape[0]
+
+    if T0 <= 0:
+        return np.ones(max(T0, 1))
+
+    # Column-center if using intercept (matches R's intercept=TRUE default)
+    if intercept:
+        Y = Y - Y.mean(axis=0)
+
+    A = Y[:, :T0]
+    b = Y[:, T0]
+    eta = N * zeta ** 2
+
+    if init_weights is not None:
+        lam = init_weights.copy()
+    else:
+        lam = np.ones(T0) / T0
+
+    vals = np.full(max_iter, np.nan)
+    for t in range(max_iter):
+        lam = _fw_step(A, lam, b, eta)
+        err = Y @ np.append(lam, -1.0)
+        vals[t] = zeta ** 2 * np.sum(lam ** 2) + np.sum(err ** 2) / N
+        if t >= 1 and vals[t - 1] - vals[t] < min_decrease ** 2:
+            break
+
+    return lam
+
+
+def _sparsify(v: np.ndarray) -> np.ndarray:
+    """Sparsify weight vector by zeroing out small entries.
+
+    Matches R's synthdid ``sparsify_function``:
+    ``v[v <= max(v)/4] = 0; v = v / sum(v)``
+
+    Parameters
+    ----------
+    v : np.ndarray
+        Weight vector.
+
+    Returns
+    -------
+    np.ndarray
+        Sparsified weight vector summing to 1.
+    """
+    v = v.copy()
+    max_v = np.max(v)
+    if max_v <= 0:
+        return np.ones(len(v)) / len(v)
+    v[v <= max_v / 4] = 0.0
+    return _sum_normalize(v)
+
+
+def compute_time_weights(
+    Y_pre_control: np.ndarray,
+    Y_post_control: np.ndarray,
+    zeta_lambda: float,
+    intercept: bool = True,
+    min_decrease: float = 1e-5,
+    max_iter_pre_sparsify: int = 100,
+    max_iter: int = 10000,
+) -> np.ndarray:
+    """Compute SDID time weights via Frank-Wolfe optimization.
+
+    Matches R's ``synthdid::sc.weight.fw(Yc[1:N0, ], zeta=zeta.lambda,
+    intercept=TRUE)`` where ``Yc`` is the collapsed-form matrix. Uses
+    two-pass optimization with sparsification (same as unit weights),
+    matching R's default ``sparsify=sparsify_function``.
+
+    Parameters
+    ----------
+    Y_pre_control : np.ndarray
+        Control outcomes in pre-treatment periods, shape (n_pre, n_control).
+    Y_post_control : np.ndarray
+        Control outcomes in post-treatment periods, shape (n_post, n_control).
+    zeta_lambda : float
+        Regularization parameter for time weights.
+    intercept : bool, default True
+        If True, column-center the optimization matrix.
+    min_decrease : float, default 1e-5
+        Convergence criterion for Frank-Wolfe. R uses ``1e-5 * noise_level``.
+    max_iter_pre_sparsify : int, default 100
+        Iterations for first pass (before sparsification).
+    max_iter : int, default 10000
+        Maximum iterations for second pass (after sparsification).
+        Matches R's default.
+
+    Returns
+    -------
+    np.ndarray
+        Time weights of shape (n_pre,) on the simplex.
+    """
+    if HAS_RUST_BACKEND:
+        return np.asarray(_rust_compute_time_weights(
+            np.ascontiguousarray(Y_pre_control, dtype=np.float64),
+            np.ascontiguousarray(Y_post_control, dtype=np.float64),
+            zeta_lambda, intercept, min_decrease,
+            max_iter_pre_sparsify, max_iter,
+        ))
+
+    n_pre = Y_pre_control.shape[0]
 
     if n_pre <= 1:
-        return np.asarray(np.ones(n_pre))
+        return np.ones(n_pre)
 
-    # Compute mean control outcomes per period
-    control_means = np.mean(Y_control, axis=1)
+    # Build collapsed form: (N_co, T_pre + 1), last col = per-control post mean
+    post_means = np.mean(Y_post_control, axis=0)  # (N_co,)
+    Y_time = np.column_stack([Y_pre_control.T, post_means])  # (N_co, T_pre+1)
 
-    # Compute differences from treated
-    diffs = np.abs(Y_treated - control_means)
+    # First pass: limited iterations (matching R's max.iter.pre.sparsify)
+    lam = _sc_weight_fw(
+        Y_time,
+        zeta=zeta_lambda,
+        intercept=intercept,
+        min_decrease=min_decrease,
+        max_iter=max_iter_pre_sparsify,
+    )
 
-    # Inverse weighting: periods with smaller differences get higher weight
-    # Add regularization to prevent extreme weights
-    inv_diffs = 1.0 / (diffs + zeta * np.std(diffs) + _NUMERICAL_EPS)
+    # Sparsify: zero out small weights, renormalize (R's sparsify_function)
+    lam = _sparsify(lam)
 
-    # Normalize to sum to 1
-    weights = inv_diffs / np.sum(inv_diffs)
+    # Second pass: from sparsified initialization (matching R's max.iter)
+    lam = _sc_weight_fw(
+        Y_time,
+        zeta=zeta_lambda,
+        intercept=intercept,
+        init_weights=lam,
+        min_decrease=min_decrease,
+        max_iter=max_iter,
+    )
 
-    return np.asarray(weights)
+    return lam
+
+
+def compute_sdid_unit_weights(
+    Y_pre_control: np.ndarray,
+    Y_pre_treated_mean: np.ndarray,
+    zeta_omega: float,
+    intercept: bool = True,
+    min_decrease: float = 1e-5,
+    max_iter_pre_sparsify: int = 100,
+    max_iter: int = 10000,
+) -> np.ndarray:
+    """Compute SDID unit weights via Frank-Wolfe with two-pass sparsification.
+
+    Matches R's ``synthdid::sc.weight.fw(t(Yc[, 1:T0]), zeta=zeta.omega,
+    intercept=TRUE)`` followed by the sparsify/re-optimize pass.
+
+    Parameters
+    ----------
+    Y_pre_control : np.ndarray
+        Control outcomes in pre-treatment periods, shape (n_pre, n_control).
+    Y_pre_treated_mean : np.ndarray
+        Mean treated outcomes in pre-treatment periods, shape (n_pre,).
+    zeta_omega : float
+        Regularization parameter for unit weights.
+    intercept : bool, default True
+        If True, column-center the optimization matrix.
+    min_decrease : float, default 1e-5
+        Convergence criterion for Frank-Wolfe. R uses ``1e-5 * noise_level``.
+    max_iter_pre_sparsify : int, default 100
+        Iterations for first pass (before sparsification).
+    max_iter : int, default 10000
+        Iterations for second pass (after sparsification). Matches R's default.
+
+    Returns
+    -------
+    np.ndarray
+        Unit weights of shape (n_control,) on the simplex.
+    """
+    n_control = Y_pre_control.shape[1]
+
+    if n_control == 0:
+        return np.asarray([])
+    if n_control == 1:
+        return np.asarray([1.0])
+
+    if HAS_RUST_BACKEND:
+        return np.asarray(_rust_sdid_unit_weights(
+            np.ascontiguousarray(Y_pre_control, dtype=np.float64),
+            np.ascontiguousarray(Y_pre_treated_mean, dtype=np.float64),
+            zeta_omega, intercept, min_decrease,
+            max_iter_pre_sparsify, max_iter,
+        ))
+
+    # Build collapsed form: (T_pre, N_co + 1), last col = treated pre means
+    Y_unit = np.column_stack([Y_pre_control, Y_pre_treated_mean.reshape(-1, 1)])
+
+    # First pass: limited iterations
+    omega = _sc_weight_fw(
+        Y_unit,
+        zeta=zeta_omega,
+        intercept=intercept,
+        max_iter=max_iter_pre_sparsify,
+        min_decrease=min_decrease,
+    )
+
+    # Sparsify: zero out weights <= max/4, renormalize
+    omega = _sparsify(omega)
+
+    # Second pass: from sparsified initialization
+    omega = _sc_weight_fw(
+        Y_unit,
+        zeta=zeta_omega,
+        intercept=intercept,
+        init_weights=omega,
+        max_iter=max_iter,
+        min_decrease=min_decrease,
+    )
+
+    return omega
 
 
 def compute_sdid_estimator(

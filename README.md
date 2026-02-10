@@ -1163,11 +1163,12 @@ Use Synthetic DiD instead of standard DiD when:
 
 ```python
 SyntheticDiD(
-    lambda_reg=0.0,     # Regularization toward uniform weights (0 = no reg)
-    zeta=1.0,           # Time weight regularization (higher = more uniform)
-    alpha=0.05,         # Significance level
-    n_bootstrap=200,    # Bootstrap iterations for SE (0 = placebo-based)
-    seed=None           # Random seed for reproducibility
+    zeta_omega=None,        # Unit weight regularization (None = auto-computed from data)
+    zeta_lambda=None,       # Time weight regularization (None = auto-computed from data)
+    alpha=0.05,             # Significance level
+    variance_method="placebo",  # "placebo" (default, matches R) or "bootstrap"
+    n_bootstrap=200,        # Replications for SE estimation
+    seed=None               # Random seed for reproducibility
 )
 ```
 
@@ -1872,11 +1873,12 @@ MultiPeriodDiD(
 
 ```python
 SyntheticDiD(
-    lambda_reg=0.0,     # L2 regularization for unit weights
-    zeta=1.0,           # Regularization for time weights
-    alpha=0.05,         # Significance level for CIs
-    n_bootstrap=200,    # Bootstrap iterations for SE
-    seed=None           # Random seed for reproducibility
+    zeta_omega=None,        # Unit weight regularization (None = auto from data)
+    zeta_lambda=None,       # Time weight regularization (None = auto from data)
+    alpha=0.05,             # Significance level for CIs
+    variance_method="placebo",  # "placebo" (R default) or "bootstrap"
+    n_bootstrap=200,        # Replications for SE estimation
+    seed=None               # Random seed for reproducibility
 )
 ```
 

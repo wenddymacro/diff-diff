@@ -82,6 +82,15 @@ se_time <- as.numeric(difftime(Sys.time(), se_start, units = "secs"))
 
 total_time <- estimation_time + se_time
 
+# Compute noise level and regularization (to match Python's auto-computed values)
+N0 <- setup$N0
+T0 <- setup$T0
+N1 <- nrow(setup$Y) - N0
+T1 <- ncol(setup$Y) - T0
+noise_level <- sd(apply(setup$Y[1:N0, 1:T0], 1, diff))
+zeta_omega <- ((N1 * T1)^(1/4)) * noise_level
+zeta_lambda <- 1e-6 * noise_level
+
 # Format output
 results <- list(
   estimator = "synthdid::synthdid_estimate",
@@ -90,9 +99,14 @@ results <- list(
   att = as.numeric(tau_hat),
   se = se,
 
-  # Weights
+  # Weights (full precision)
   unit_weights = as.numeric(unit_weights),
   time_weights = as.numeric(time_weights),
+
+  # Regularization parameters
+  noise_level = noise_level,
+  zeta_omega = zeta_omega,
+  zeta_lambda = zeta_lambda,
 
   # Timing
   timing = list(
@@ -105,10 +119,10 @@ results <- list(
   metadata = list(
     r_version = R.version.string,
     synthdid_version = as.character(packageVersion("synthdid")),
-    n_control = setup$N0,
-    n_treated = nrow(setup$Y) - setup$N0,
-    n_pre_periods = setup$T0,
-    n_post_periods = ncol(setup$Y) - setup$T0
+    n_control = N0,
+    n_treated = N1,
+    n_pre_periods = T0,
+    n_post_periods = T1
   )
 )
 

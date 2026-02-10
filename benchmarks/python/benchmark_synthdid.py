@@ -106,9 +106,13 @@ def main():
         # Point estimate and SE
         "att": float(results.att),
         "se": float(results.se),
-        # Weights
+        # Weights (full precision)
         "unit_weights": unit_weights_df["weight"].tolist(),
         "time_weights": time_weights_df["weight"].tolist(),
+        # Regularization parameters
+        "noise_level": float(results.noise_level) if results.noise_level is not None else None,
+        "zeta_omega": float(results.zeta_omega) if results.zeta_omega is not None else None,
+        "zeta_lambda": float(results.zeta_lambda) if results.zeta_lambda is not None else None,
         # Timing
         "timing": {
             "estimation_seconds": total_time,

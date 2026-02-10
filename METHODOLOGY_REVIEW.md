@@ -25,7 +25,7 @@ Each estimator in diff-diff should be periodically reviewed to ensure:
 | TwoWayFixedEffects | `twfe.py` | `fixest::feols()` | **Complete** | 2026-02-08 |
 | CallawaySantAnna | `staggered.py` | `did::att_gt()` | **Complete** | 2026-01-24 |
 | SunAbraham | `sun_abraham.py` | `fixest::sunab()` | Not Started | - |
-| SyntheticDiD | `synthetic_did.py` | `synthdid::synthdid_estimate()` | Not Started | - |
+| SyntheticDiD | `synthetic_did.py` | `synthdid::synthdid_estimate()` | **Complete** | 2026-02-10 |
 | TripleDifference | `triple_diff.py` | (forthcoming) | Not Started | - |
 | TROP | `trop.py` | (forthcoming) | Not Started | - |
 | BaconDecomposition | `bacon.py` | `bacondecomp::bacon()` | Not Started | - |
@@ -314,14 +314,37 @@ variables appear to the left of the `|` separator.
 | Module | `synthetic_did.py` |
 | Primary Reference | Arkhangelsky et al. (2021) |
 | R Reference | `synthdid::synthdid_estimate()` |
-| Status | Not Started |
-| Last Review | - |
+| Status | **Complete** |
+| Last Review | 2026-02-10 |
 
 **Corrections Made:**
-- (None yet)
+1. **Time weights: Frank-Wolfe on collapsed form** (was heuristic inverse-distance).
+   Replaced ad-hoc inverse-distance weighting with the Frank-Wolfe algorithm operating
+   on the collapsed (N_co x T_pre) problem as specified in Algorithm 1 of
+   Arkhangelsky et al. (2021), matching R's `synthdid::fw.step()`.
+2. **Unit weights: Frank-Wolfe with two-pass sparsification** (was projected gradient
+   descent with wrong penalty). Replaced projected gradient descent (which used an
+   incorrect penalty formulation) with Frank-Wolfe optimization followed by two-pass
+   sparsification, matching R's `synthdid::sc.weight.fw()` and `sparsify_function()`.
+3. **Auto-computed regularization from data noise level** (was `lambda_reg=0.0`,
+   `zeta=1.0`). Regularization parameters `zeta_omega` and `zeta_lambda` are now
+   computed automatically from the data noise level (N_tr * sigma^2) as specified in
+   Appendix D of Arkhangelsky et al. (2021), matching R's default behavior.
+4. **Bootstrap SE uses fixed weights matching R's `bootstrap_sample`** (was
+   re-estimating all weights). The bootstrap variance procedure now holds unit and time
+   weights fixed at their point estimates and only re-estimates the treatment effect,
+   matching the approach in R's `synthdid::bootstrap_sample()`.
+5. **Default `variance_method` changed to `"placebo"`** matching R's default. The R
+   package uses placebo variance by default (`synthdid_estimate` returns an object whose
+   `vcov()` uses the placebo method); our default now matches.
+6. **Deprecated `lambda_reg` and `zeta` params; new params are `zeta_omega` and
+   `zeta_lambda`**. The old parameters had unclear semantics and did not correspond to
+   the paper's notation. The new parameters directly match the paper and R package
+   naming conventions. `lambda_reg` and `zeta` are deprecated with warnings and will
+   be removed in a future release.
 
 **Outstanding Concerns:**
-- (None yet)
+- (None)
 
 ---
 

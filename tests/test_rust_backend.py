@@ -1667,6 +1667,484 @@ class TestTROPJointRustVsNumpy:
             f"differ by {att_diff:.3f}, should be < 0.5"
 
 
+@pytest.mark.skipif(not HAS_RUST_BACKEND, reason="Rust backend not available")
+class TestSDIDRustBackend:
+    """Test suite for SDID Frank-Wolfe Rust backend functions."""
+
+    def test_noise_level_matches_numpy(self):
+        """Test Rust noise level matches NumPy implementation."""
+        from diff_diff._rust_backend import compute_noise_level as rust_fn
+        from diff_diff.utils import _compute_noise_level_numpy as numpy_fn
+
+        np.random.seed(42)
+        Y_pre = np.random.randn(10, 5)
+        rust_nl = rust_fn(Y_pre)
+        numpy_nl = numpy_fn(Y_pre)
+        assert abs(rust_nl - numpy_nl) < 1e-10, \
+            f"Noise levels differ: rust={rust_nl}, numpy={numpy_nl}"
+
+    def test_noise_level_single_period(self):
+        """Test noise level returns 0 for single pre-period."""
+        from diff_diff._rust_backend import compute_noise_level as rust_fn
+
+        Y_pre = np.random.randn(1, 5)
+        assert rust_fn(Y_pre) == 0.0
+
+    def test_sc_weight_fw_on_simplex(self):
+        """Test Frank-Wolfe solver produces valid simplex weights."""
+        from diff_diff._rust_backend import sc_weight_fw as rust_fn
+
+        np.random.seed(42)
+        Y = np.random.randn(5, 4)  # 5 rows, 3 pre-periods + 1 target
+        weights = rust_fn(Y, 0.1, True, None, 1e-3, 100)
+        assert abs(weights.sum() - 1.0) < 1e-6, f"Weights should sum to 1, got {weights.sum()}"
+        assert np.all(weights >= -1e-6), "Weights should be non-negative"
+        assert weights.shape == (3,), f"Expected shape (3,), got {weights.shape}"
+
+    def test_sc_weight_fw_matches_numpy(self):
+        """Test Rust Frank-Wolfe matches Python implementation."""
+        from diff_diff._rust_backend import sc_weight_fw as rust_fn
+        from diff_diff.utils import _sc_weight_fw_numpy as numpy_fn
+
+        np.random.seed(42)
+        Y = np.random.randn(8, 6)  # 8 rows, 5 pre + 1 target
+        rust_w = rust_fn(Y, 0.5, True, None, 1e-3, 1000)
+        numpy_w = numpy_fn(Y, 0.5, True, None, 1e-3, 1000)
+        np.testing.assert_array_almost_equal(
+            rust_w, numpy_w, decimal=6,
+            err_msg="Frank-Wolfe weights should match"
+        )
+
+    def test_sc_weight_fw_with_init_weights(self):
+        """Test Frank-Wolfe with initial weights."""
+        from diff_diff._rust_backend import sc_weight_fw as rust_fn
+        from diff_diff.utils import _sc_weight_fw_numpy as numpy_fn
+
+        np.random.seed(42)
+        Y = np.random.randn(6, 5)
+        init_w = np.array([0.5, 0.3, 0.15, 0.05])
+        rust_w = rust_fn(Y, 0.2, True, init_w, 1e-3, 500)
+        numpy_w = numpy_fn(Y, 0.2, True, init_w, 1e-3, 500)
+        np.testing.assert_array_almost_equal(
+            rust_w, numpy_w, decimal=6,
+            err_msg="Frank-Wolfe with init weights should match"
+        )
+
+    def test_time_weights_on_simplex(self):
+        """Test Rust time weights are on simplex."""
+        from diff_diff._rust_backend import compute_time_weights as rust_fn
+
+        np.random.seed(42)
+        Y_pre = np.random.randn(8, 5)
+        Y_post = np.random.randn(3, 5)
+        weights = rust_fn(Y_pre, Y_post, 0.01, True, 1e-3, 1000)
+        assert abs(weights.sum() - 1.0) < 1e-6
+        assert np.all(weights >= -1e-6)
+        assert weights.shape == (8,)
+
+    def test_time_weights_match_numpy(self):
+        """Test Rust and NumPy time weights match (2-pass with sparsification)."""
+        from diff_diff._rust_backend import compute_time_weights as rust_fn
+        from diff_diff.utils import _sc_weight_fw_numpy, _sparsify
+
+        np.random.seed(42)
+        Y_pre = np.random.randn(6, 4)
+        Y_post = np.random.randn(2, 4)
+
+        min_decrease = 1e-3
+        max_iter_pre = 100
+        max_iter = 1000
+
+        # Rust implementation (2-pass with sparsification)
+        rust_w = rust_fn(Y_pre, Y_post, 0.01, True, min_decrease,
+                         max_iter_pre, max_iter)
+
+        # Python implementation (manual 2-pass matching Rust)
+        post_means = np.mean(Y_post, axis=0)
+        Y_time = np.column_stack([Y_pre.T, post_means])
+        lam = _sc_weight_fw_numpy(Y_time, 0.01, True, None,
+                                  min_decrease, max_iter_pre)
+        lam = _sparsify(lam)
+        numpy_w = _sc_weight_fw_numpy(Y_time, 0.01, True, lam,
+                                      min_decrease, max_iter)
+
+        np.testing.assert_array_almost_equal(
+            rust_w, numpy_w, decimal=6,
+            err_msg="Time weights should match"
+        )
+
+    def test_time_weights_single_preperiod(self):
+        """Test time weights with single pre-period returns [1.0]."""
+        from diff_diff._rust_backend import compute_time_weights as rust_fn
+
+        Y_pre = np.random.randn(1, 5)
+        Y_post = np.random.randn(2, 5)
+        weights = rust_fn(Y_pre, Y_post, 0.01)
+        assert weights.shape == (1,)
+        assert abs(weights[0] - 1.0) < 1e-10
+
+    def test_unit_weights_on_simplex(self):
+        """Test Rust unit weights are on simplex."""
+        from diff_diff._rust_backend import compute_sdid_unit_weights as rust_fn
+
+        np.random.seed(42)
+        Y_pre = np.random.randn(8, 5)
+        Y_tr_mean = np.random.randn(8)
+        weights = rust_fn(Y_pre, Y_tr_mean, 0.5, True, 1e-3, 100, 1000)
+        assert abs(weights.sum() - 1.0) < 1e-6
+        assert np.all(weights >= -1e-6)
+        assert weights.shape == (5,)
+
+    def test_unit_weights_match_numpy(self):
+        """Test Rust and NumPy unit weights match."""
+        from diff_diff._rust_backend import compute_sdid_unit_weights as rust_fn
+        from diff_diff.utils import _sc_weight_fw_numpy, _sparsify
+
+        np.random.seed(42)
+        Y_pre = np.random.randn(6, 4)
+        Y_tr_mean = np.random.randn(6)
+
+        # Rust implementation
+        rust_w = rust_fn(Y_pre, Y_tr_mean, 0.5, True, 1e-3, 100, 1000)
+
+        # Python implementation (manual)
+        Y_unit = np.column_stack([Y_pre, Y_tr_mean.reshape(-1, 1)])
+        omega = _sc_weight_fw_numpy(Y_unit, 0.5, True, None, 1e-3, 100)
+        omega = _sparsify(omega)
+        numpy_w = _sc_weight_fw_numpy(Y_unit, 0.5, True, omega, 1e-3, 1000)
+
+        np.testing.assert_array_almost_equal(
+            rust_w, numpy_w, decimal=6,
+            err_msg="Unit weights should match"
+        )
+
+    def test_unit_weights_single_control(self):
+        """Test unit weights with single control returns [1.0]."""
+        from diff_diff._rust_backend import compute_sdid_unit_weights as rust_fn
+
+        Y_pre = np.random.randn(5, 1)
+        Y_tr_mean = np.random.randn(5)
+        weights = rust_fn(Y_pre, Y_tr_mean, 0.5)
+        assert weights.shape == (1,)
+        assert abs(weights[0] - 1.0) < 1e-10
+
+    def test_full_sdid_rust_vs_python(self):
+        """Test full SDID estimation produces same results with Rust and Python."""
+        import pandas as pd
+        from unittest.mock import patch
+        import sys
+        from diff_diff import SyntheticDiD
+
+        np.random.seed(42)
+        n_control, n_treated, n_pre, n_post = 8, 1, 6, 2
+        true_effect = 3.0
+        data = []
+        for i in range(n_control + n_treated):
+            is_treated = i >= n_control
+            for t in range(n_pre + n_post):
+                post = t >= n_pre
+                y = 1.0 + 0.5 * i + 0.3 * t + np.random.randn() * 0.3
+                if is_treated and post:
+                    y += true_effect
+                data.append({
+                    'unit': i, 'time': t, 'outcome': y,
+                    'treated': 1 if is_treated else 0,
+                    'post': 1 if post else 0,
+                })
+        df = pd.DataFrame(data)
+        post_periods = list(range(n_pre, n_pre + n_post))
+
+        # Run with Rust backend
+        sdid_rust = SyntheticDiD(variance_method="placebo", seed=42)
+        results_rust = sdid_rust.fit(df, 'outcome', 'treated', 'unit', 'time', post_periods)
+
+        # Run with Python backend
+        utils_mod = sys.modules['diff_diff.utils']
+        with patch.object(utils_mod, 'HAS_RUST_BACKEND', False):
+            sdid_py = SyntheticDiD(variance_method="placebo", seed=42)
+            results_py = sdid_py.fit(df.copy(), 'outcome', 'treated', 'unit', 'time', post_periods)
+
+        # ATT should be very close
+        np.testing.assert_almost_equal(
+            results_rust.att, results_py.att, decimal=4,
+            err_msg="Rust and Python ATT should match"
+        )
+
+
+@pytest.mark.skipif(not HAS_RUST_BACKEND, reason="Rust backend not available")
+class TestSDIDVarianceRustBackend:
+    """Test suite for SDID parallel variance estimation in Rust."""
+
+    @staticmethod
+    def _make_sdid_data(n_control=10, n_treated=2, n_pre=6, n_post=2,
+                        true_effect=3.0, seed=42):
+        """Create well-conditioned SDID test data."""
+        rng = np.random.default_rng(seed)
+        Y_pre_control = rng.standard_normal((n_pre, n_control))
+        Y_post_control = rng.standard_normal((n_post, n_control))
+        Y_pre_treated = rng.standard_normal((n_pre, n_treated))
+        Y_post_treated = Y_pre_treated[:n_post, :] + true_effect + rng.standard_normal((n_post, n_treated)) * 0.3
+
+        Y_pre_treated_mean = np.mean(Y_pre_treated, axis=1)
+        Y_post_treated_mean = np.mean(Y_post_treated, axis=1)
+
+        return (Y_pre_control, Y_post_control, Y_pre_treated,
+                Y_post_treated, Y_pre_treated_mean, Y_post_treated_mean)
+
+    def test_placebo_se_returns_valid(self):
+        """Rust placebo SE produces valid float > 0."""
+        from diff_diff._rust_backend import placebo_variance_sdid
+
+        data = self._make_sdid_data()
+        Y_pre_c, Y_post_c, _, _, Y_pre_t_mean, Y_post_t_mean = data
+
+        se, estimates = placebo_variance_sdid(
+            Y_pre_c, Y_post_c, Y_pre_t_mean, Y_post_t_mean,
+            2,    # n_treated
+            0.5,  # zeta_omega
+            0.01, # zeta_lambda
+            1e-5, # min_decrease
+            True, 100, 10000, 50, 42,
+        )
+
+        assert isinstance(se, float)
+        assert se > 0, f"SE should be > 0, got {se}"
+        assert np.isfinite(se), f"SE should be finite, got {se}"
+        assert len(estimates) > 0, "Should have some estimates"
+
+    def test_placebo_se_reproducible(self):
+        """Same seed produces same SE and estimates."""
+        from diff_diff._rust_backend import placebo_variance_sdid
+
+        data = self._make_sdid_data()
+        Y_pre_c, Y_post_c, _, _, Y_pre_t_mean, Y_post_t_mean = data
+
+        args = (Y_pre_c, Y_post_c, Y_pre_t_mean, Y_post_t_mean,
+                2, 0.5, 0.01, 1e-5, True, 100, 10000, 30, 42)
+
+        se1, est1 = placebo_variance_sdid(*args)
+        se2, est2 = placebo_variance_sdid(*args)
+
+        assert abs(se1 - se2) < 1e-10, f"SEs should match: {se1} vs {se2}"
+        np.testing.assert_array_equal(est1, est2)
+
+    def test_placebo_estimates_correct_count(self):
+        """All replications succeed on well-conditioned data."""
+        from diff_diff._rust_backend import placebo_variance_sdid
+
+        data = self._make_sdid_data()
+        Y_pre_c, Y_post_c, _, _, Y_pre_t_mean, Y_post_t_mean = data
+        replications = 50
+
+        _, estimates = placebo_variance_sdid(
+            Y_pre_c, Y_post_c, Y_pre_t_mean, Y_post_t_mean,
+            2, 0.5, 0.01, 1e-5, True, 100, 10000, replications, 42,
+        )
+
+        assert len(estimates) == replications, \
+            f"Expected {replications} estimates, got {len(estimates)}"
+
+    def test_placebo_se_statistically_matches_python(self):
+        """Rust and Python SEs are within 30% (different RNG sequences)."""
+        from diff_diff._rust_backend import placebo_variance_sdid
+        from diff_diff.utils import (
+            compute_sdid_unit_weights as py_unit_weights,
+            compute_time_weights as py_time_weights,
+            compute_sdid_estimator,
+        )
+        from diff_diff.utils import _sum_normalize
+
+        data = self._make_sdid_data(seed=123)
+        Y_pre_c, Y_post_c, _, _, Y_pre_t_mean, Y_post_t_mean = data
+        n_treated = 2
+        replications = 100
+
+        # Rust SE (average over multiple seeds for stability)
+        rust_ses = []
+        for seed in [42, 43, 44]:
+            se_r, _ = placebo_variance_sdid(
+                Y_pre_c, Y_post_c, Y_pre_t_mean, Y_post_t_mean,
+                n_treated, 0.5, 0.01, 1e-5, True, 100, 10000, replications, seed,
+            )
+            rust_ses.append(se_r)
+        rust_mean_se = np.mean(rust_ses)
+
+        # Python SE (average over multiple seeds)
+        python_ses = []
+        for seed in [42, 43, 44]:
+            rng = np.random.default_rng(seed)
+            n_control = Y_pre_c.shape[1]
+            n_pseudo_control = n_control - n_treated
+            estimates = []
+            for _ in range(replications):
+                perm = rng.permutation(n_control)
+                pc_idx = perm[:n_pseudo_control]
+                pt_idx = perm[n_pseudo_control:]
+                y_pre_pc = Y_pre_c[:, pc_idx]
+                y_post_pc = Y_post_c[:, pc_idx]
+                y_pre_pt_mean = np.mean(Y_pre_c[:, pt_idx], axis=1)
+                y_post_pt_mean = np.mean(Y_post_c[:, pt_idx], axis=1)
+                omega = py_unit_weights(y_pre_pc, y_pre_pt_mean, zeta_omega=0.5, min_decrease=1e-5)
+                lam = py_time_weights(y_pre_pc, y_post_pc, zeta_lambda=0.01, min_decrease=1e-5)
+                tau = compute_sdid_estimator(y_pre_pc, y_post_pc, y_pre_pt_mean, y_post_pt_mean, omega, lam)
+                estimates.append(tau)
+            n = len(estimates)
+            py_se = np.sqrt((n - 1) / n) * np.std(estimates, ddof=1)
+            python_ses.append(py_se)
+        python_mean_se = np.mean(python_ses)
+
+        # SEs should be in the same ballpark (within 30%)
+        ratio = rust_mean_se / python_mean_se if python_mean_se > 0 else float('inf')
+        assert 0.7 < ratio < 1.3, \
+            f"SE ratio {ratio:.2f} out of range: Rust={rust_mean_se:.4f}, Python={python_mean_se:.4f}"
+
+    def test_placebo_insufficient_controls(self):
+        """Returns (0.0, []) when n_control <= n_treated."""
+        from diff_diff._rust_backend import placebo_variance_sdid
+
+        Y_pre_c = np.random.randn(5, 2)
+        Y_post_c = np.random.randn(2, 2)
+        Y_pre_t_mean = np.random.randn(5)
+        Y_post_t_mean = np.random.randn(2)
+
+        se, estimates = placebo_variance_sdid(
+            Y_pre_c, Y_post_c, Y_pre_t_mean, Y_post_t_mean,
+            3,    # n_treated > n_control=2
+            0.5, 0.01, 1e-5, True, 100, 10000, 50, 42,
+        )
+
+        assert se == 0.0
+        assert len(estimates) == 0
+
+    def test_bootstrap_se_returns_valid(self):
+        """Rust bootstrap SE produces valid float > 0."""
+        from diff_diff._rust_backend import bootstrap_variance_sdid
+
+        data = self._make_sdid_data()
+        Y_pre_c, Y_post_c, Y_pre_t, Y_post_t, _, _ = data
+
+        # Need unit/time weights
+        omega = np.ones(Y_pre_c.shape[1]) / Y_pre_c.shape[1]
+        lam = np.ones(Y_pre_c.shape[0]) / Y_pre_c.shape[0]
+
+        se, estimates, n_failed = bootstrap_variance_sdid(
+            Y_pre_c, Y_post_c, Y_pre_t, Y_post_t,
+            omega, lam, 50, 42,
+        )
+
+        assert isinstance(se, float)
+        assert se > 0, f"SE should be > 0, got {se}"
+        assert np.isfinite(se)
+        assert len(estimates) > 0
+
+    def test_bootstrap_se_reproducible(self):
+        """Same seed produces same SE."""
+        from diff_diff._rust_backend import bootstrap_variance_sdid
+
+        data = self._make_sdid_data()
+        Y_pre_c, Y_post_c, Y_pre_t, Y_post_t, _, _ = data
+        omega = np.ones(Y_pre_c.shape[1]) / Y_pre_c.shape[1]
+        lam = np.ones(Y_pre_c.shape[0]) / Y_pre_c.shape[0]
+
+        args = (Y_pre_c, Y_post_c, Y_pre_t, Y_post_t, omega, lam, 30, 42)
+
+        se1, est1, _ = bootstrap_variance_sdid(*args)
+        se2, est2, _ = bootstrap_variance_sdid(*args)
+
+        assert abs(se1 - se2) < 1e-10
+        np.testing.assert_array_equal(est1, est2)
+
+    def test_bootstrap_se_statistically_matches_python(self):
+        """Rust and Python bootstrap SEs are within 30%."""
+        from diff_diff._rust_backend import bootstrap_variance_sdid
+        from diff_diff.utils import compute_sdid_estimator, _sum_normalize
+
+        data = self._make_sdid_data(seed=99)
+        Y_pre_c, Y_post_c, Y_pre_t, Y_post_t, _, _ = data
+        n_control = Y_pre_c.shape[1]
+        n_treated = Y_pre_t.shape[1]
+        n_total = n_control + n_treated
+        n_pre = Y_pre_c.shape[0]
+        n_bootstrap = 200
+
+        omega = np.ones(n_control) / n_control
+        lam = np.ones(n_pre) / n_pre
+
+        # Rust SE
+        se_rust, _, _ = bootstrap_variance_sdid(
+            Y_pre_c, Y_post_c, Y_pre_t, Y_post_t,
+            omega, lam, n_bootstrap, 42,
+        )
+
+        # Python SE
+        Y_full = np.block([
+            [Y_pre_c, Y_pre_t],
+            [Y_post_c, Y_post_t]
+        ])
+        rng = np.random.default_rng(42)
+        py_estimates = []
+        for _ in range(n_bootstrap):
+            boot_idx = rng.choice(n_total, size=n_total, replace=True)
+            boot_is_control = boot_idx < n_control
+            if not np.any(boot_is_control) or np.all(boot_is_control):
+                continue
+            boot_omega = _sum_normalize(omega[boot_idx[boot_is_control]])
+            Y_boot = Y_full[:, boot_idx]
+            Y_boot_pre_t_mean = np.mean(Y_boot[:n_pre, ~boot_is_control], axis=1)
+            Y_boot_post_t_mean = np.mean(Y_boot[n_pre:, ~boot_is_control], axis=1)
+            tau = compute_sdid_estimator(
+                Y_boot[:n_pre, boot_is_control],
+                Y_boot[n_pre:, boot_is_control],
+                Y_boot_pre_t_mean, Y_boot_post_t_mean,
+                boot_omega, lam,
+            )
+            py_estimates.append(tau)
+        se_python = float(np.std(py_estimates, ddof=1))
+
+        ratio = se_rust / se_python if se_python > 0 else float('inf')
+        assert 0.5 < ratio < 2.0, \
+            f"Bootstrap SE ratio {ratio:.2f}: Rust={se_rust:.4f}, Python={se_python:.4f}"
+
+    def test_full_sdid_fit_uses_rust_variance(self):
+        """SyntheticDiD.fit() uses Rust variance when available and produces valid results."""
+        import pandas as pd
+        from diff_diff import SyntheticDiD
+
+        np.random.seed(42)
+        n_control, n_treated, n_pre, n_post = 8, 2, 6, 2
+        true_effect = 3.0
+        data = []
+        for i in range(n_control + n_treated):
+            is_treated = i >= n_control
+            for t in range(n_pre + n_post):
+                post = t >= n_pre
+                y = 1.0 + 0.5 * i + 0.3 * t + np.random.randn() * 0.3
+                if is_treated and post:
+                    y += true_effect
+                data.append({
+                    'unit': i, 'time': t, 'outcome': y,
+                    'treated': 1 if is_treated else 0,
+                })
+        df = pd.DataFrame(data)
+        post_periods = list(range(n_pre, n_pre + n_post))
+
+        # Fit with placebo variance (uses Rust)
+        sdid = SyntheticDiD(variance_method="placebo", n_bootstrap=50, seed=42)
+        results = sdid.fit(df, 'outcome', 'treated', 'unit', 'time', post_periods)
+
+        assert np.isfinite(results.att), f"ATT should be finite: {results.att}"
+        assert np.isfinite(results.se), f"SE should be finite: {results.se}"
+        assert results.se > 0, f"SE should be > 0: {results.se}"
+
+        # Fit with bootstrap variance (uses Rust)
+        sdid_boot = SyntheticDiD(variance_method="bootstrap", n_bootstrap=50, seed=42)
+        results_boot = sdid_boot.fit(df, 'outcome', 'treated', 'unit', 'time', post_periods)
+
+        assert np.isfinite(results_boot.att), f"Bootstrap ATT should be finite: {results_boot.att}"
+        assert np.isfinite(results_boot.se), f"Bootstrap SE should be finite: {results_boot.se}"
+        assert results_boot.se > 0, f"Bootstrap SE should be > 0: {results_boot.se}"
+
+
 class TestFallbackWhenNoRust:
     """Test that pure Python fallback works when Rust is unavailable."""
 

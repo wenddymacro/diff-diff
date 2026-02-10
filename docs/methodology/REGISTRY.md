@@ -572,42 +572,107 @@ Y_it = alpha_i + beta_t [+ X'_it * delta] + W'_it * gamma + epsilon_it
 τ̂^sdid = Σ_t λ_t (Ȳ_{tr,t} - Σ_j ω_j Y_{j,t})
 ```
 
-Unit weights ω solve:
+where Ȳ_{tr,t} is the mean treated outcome at time t, ω_j are unit weights, and λ_t are time weights.
+
+*Unit weights ω (Frank-Wolfe on collapsed form):*
+
+Build collapsed-form matrix Y_unit of shape (T_pre, N_co + 1), where the last column is the mean treated pre-period outcomes. Solve via Frank-Wolfe on the simplex:
+
 ```
-min_ω ||Ȳ_{tr,pre} - Σ_j ω_j Y_{j,pre}||₂² + ζ² ||ω||₂²
-s.t. ω ≥ 0, Σ_j ω_j = 1
+min_{ω on simplex}  ζ_ω² ||ω||₂² + (1/T_pre) ||A_centered ω - b_centered||₂²
 ```
 
-Time weights λ solve analogous problem matching pre/post means.
+where A = Y_unit[:, :N_co], b = Y_unit[:, N_co], and centering is column-wise (intercept=True).
 
-Regularization parameter:
+**Two-pass sparsification procedure** (matches R's `synthdid::sc.weight.fw` + `sparsify_function`):
+1. First pass: Run Frank-Wolfe for 100 iterations (max_iter_pre_sparsify) from uniform initialization
+2. Sparsify: `v[v <= max(v)/4] = 0; v = v / sum(v)` (zero out small weights, renormalize)
+3. Second pass: Run Frank-Wolfe for 1000 iterations (max_iter) starting from sparsified weights
+
+The sparsification step concentrates weights on the most important control units, improving interpretability and stability.
+
+*Time weights λ (Frank-Wolfe on collapsed form):*
+
+Build collapsed-form matrix Y_time of shape (N_co, T_pre + 1), where the last column is the per-control post-period mean (averaged across post-periods for each control unit). Solve:
+
 ```
-ζ = (N_tr × T_post)^(1/4) × σ̂
+min_{λ on simplex}  ζ_λ² ||λ||₂² + (1/N_co) ||A_centered λ - b_centered||₂²
 ```
-where σ̂ is estimated noise level.
+
+where A = Y_time[:, :T_pre], b = Y_time[:, T_pre], and centering is column-wise.
+
+*Auto-regularization (matching R's synthdid):*
+```
+noise_level = sd(first_differences of control outcomes)   # pooled across units
+zeta_omega  = (N_treated × T_post)^(1/4) × noise_level
+zeta_lambda = 1e-6 × noise_level
+```
+
+The noise level is computed as the standard deviation (ddof=1) of `np.diff(Y_pre_control, axis=0)`,
+which computes first-differences across time for each control unit and pools all values.
+This matches R's `sd(apply(Y[1:N0, 1:T0], 1, diff))`.
+
+*Frank-Wolfe step (matches R's `fw.step()`):*
+```
+half_grad = A' (A x - b) + η x        # η = N × ζ²
+i = argmin(half_grad)                   # vertex selection (simplex corner)
+d_x = e_i - x                          # direction toward vertex i
+step = -(half_grad · d_x) / (||A d_x||² + η ||d_x||²)
+step = clip(step, 0, 1)
+x_new = x + step × d_x
+```
+
+Convergence criterion: stop when objective decrease < min_decrease² (default min_decrease=1e-3).
 
 *Standard errors:*
+
 - Default: Placebo variance estimator (Algorithm 4 in paper)
-```
-V̂ = ((r-1)/r) × Var({τ̂^(j) : j ∈ controls})
-```
-where τ̂^(j) is placebo estimate treating unit j as treated
-- Alternative: Block bootstrap
+  1. Randomly permute control unit indices
+  2. Split into pseudo-controls (first N_co - N_tr) and pseudo-treated (last N_tr)
+  3. Renormalize original unit weights for pseudo-controls: `ω_pseudo = _sum_normalize(ω[pseudo_control_idx])`
+  4. Compute SDID estimate with renormalized weights and **fixed** time weights (no re-estimation)
+  5. Repeat `replications` times (default 200)
+  6. `SE = sqrt((r-1)/r) × sd(placebo_estimates)` where r = number of successful replications
+
+  This matches R's `synthdid::vcov(method="placebo")`.
+
+- Alternative: Bootstrap at unit level (matching R's `synthdid::vcov(method="bootstrap")`)
+  1. Resample ALL units (control + treated) with replacement
+  2. Identify which resampled units are control vs treated
+  3. Renormalize original unit weights for resampled controls: `ω_boot = _sum_normalize(ω[boot_control_idx])`
+  4. Time weights λ remain **unchanged** from original estimation (fixed weights)
+  5. Compute SDID estimate with renormalized ω and original λ
+  6. `SE = sd(bootstrap_estimates, ddof=1)`
 
 *Edge cases:*
-- Negative weights attempted: projected onto simplex
-- Perfect pre-treatment fit: regularization prevents overfitting
-- Single treated unit: valid, uses jackknife-style variance
+- **Frank-Wolfe non-convergence**: Returns current weights after max_iter iterations. No warning emitted; the convergence check `vals[t-1] - vals[t] < min_decrease²` simply does not trigger early exit, and the final iterate is returned.
+- **`_sparsify` all-zero input**: If `max(v) <= 0`, returns uniform weights `ones(len(v)) / len(v)`.
+- **Single control unit**: `compute_sdid_unit_weights` returns `[1.0]` immediately (short-circuit before Frank-Wolfe).
+- **Zero control units**: `compute_sdid_unit_weights` returns empty array `[]`.
+- **Single pre-period**: `compute_time_weights` returns `[1.0]` when `n_pre <= 1` (Frank-Wolfe on a 1-element simplex is trivial).
+- **Bootstrap with 0 control or 0 treated in resample**: Skip iteration (`continue`). If ALL bootstrap iterations fail, raises `ValueError`. If only 1 succeeds, warns and returns SE=0.0. If >5% failure rate, warns about reliability.
+- **Placebo with n_control <= n_treated**: Warns that not enough control units for placebo variance estimation, returns SE=0.0 and empty placebo effects array. The check is `n_control - n_treated < 1`.
+- **Negative weights attempted**: Frank-Wolfe operates on the simplex (non-negative, sum-to-1), so weights are always feasible by construction. The step size is clipped to [0, 1] and the move is toward a simplex vertex.
+- **Perfect pre-treatment fit**: Regularization (ζ² ||ω||²) prevents overfitting by penalizing weight concentration.
+- **Single treated unit**: Valid; placebo variance uses jackknife-style permutations of controls.
+- **Noise level with < 2 pre-periods**: Returns 0.0, which makes both zeta_omega and zeta_lambda equal to 0.0 (no regularization).
+- **NaN inference for undefined statistics**: t_stat uses NaN when SE is zero or non-finite; p_value and CI also NaN. Matches CallawaySantAnna NaN convention.
+- **Placebo p-value floor**: `p_value = max(empirical_p, 1/(n_replications + 1))` to avoid reporting exactly zero.
 
 **Reference implementation(s):**
 - R: `synthdid::synthdid_estimate()` (Arkhangelsky et al.'s official package)
+- Key R functions matched: `sc.weight.fw()` (Frank-Wolfe), `sparsify_function` (sparsification), `vcov.synthdid_estimate()` (variance)
 
 **Requirements checklist:**
-- [ ] Unit weights: sum to 1, non-negative (simplex constraint)
-- [ ] Time weights: sum to 1, non-negative (simplex constraint)
-- [ ] Placebo SE formula: `sqrt((r-1)/r) * sd(placebo_estimates)`
-- [ ] Regularization scales with panel dimensions
-- [ ] Returns both unit and time weights for interpretation
+- [x] Unit weights: Frank-Wolfe on collapsed form (T_pre, N_co+1), two-pass sparsification (100 iters -> sparsify -> 1000 iters)
+- [x] Time weights: Frank-Wolfe on collapsed form (N_co, T_pre+1), last column = per-control post mean
+- [x] Unit and time weights: sum to 1, non-negative (simplex constraint)
+- [x] Auto-regularization: noise_level = sd(first_diffs), zeta_omega = (N1*T1)^0.25 * noise_level, zeta_lambda = 1e-6 * noise_level
+- [x] Sparsification: v[v <= max(v)/4] = 0; v = v/sum(v)
+- [x] Placebo SE formula: sqrt((r-1)/r) * sd(placebo_estimates)
+- [x] Bootstrap: fixed weights (original lambda unchanged, omega renormalized for resampled controls)
+- [x] Returns both unit and time weights for interpretation
+- [x] Column centering (intercept=True) in Frank-Wolfe optimization
 
 ---
 
@@ -1182,7 +1247,7 @@ should be a deliberate user choice.
 | CallawaySantAnna | Analytical (influence fn) | Multiplier bootstrap |
 | SunAbraham | Cluster-robust + delta method | Pairs bootstrap |
 | ImputationDiD | Conservative clustered (Thm 3) | Multiplier bootstrap (library extension; percentile CIs and empirical p-values, consistent with CS/SA) |
-| SyntheticDiD | Placebo variance (Alg 4) | Block bootstrap |
+| SyntheticDiD | Placebo variance (Alg 4) | Unit-level bootstrap (fixed weights) |
 | TripleDifference | HC1 / cluster-robust | Influence function for IPW/DR |
 | TROP | Block bootstrap | — |
 | BaconDecomposition | N/A (exact decomposition) | Individual 2×2 SEs |

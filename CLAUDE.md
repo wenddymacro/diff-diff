@@ -68,6 +68,10 @@ cross-platform compilation - no OpenBLAS or Intel MKL installation required.
 
 - **`diff_diff/synthetic_did.py`** - Synthetic DiD estimator:
   - `SyntheticDiD` - Synthetic control combined with DiD (Arkhangelsky et al. 2021)
+  - Frank-Wolfe solver matching R's `synthdid::sc.weight.fw()` for unit and time weights
+  - Auto-computed regularization from data noise level (`zeta_omega`, `zeta_lambda`)
+  - Two-pass sparsification for unit weights (100 iters → sparsify → 1000 iters)
+  - Bootstrap SE uses fixed weights (matches R's `bootstrap_sample`)
 
 - **`diff_diff/staggered.py`** - Staggered adoption DiD main module:
   - `CallawaySantAnna` - Callaway & Sant'Anna (2021) estimator for heterogeneous treatment timing
@@ -163,6 +167,9 @@ cross-platform compilation - no OpenBLAS or Intel MKL installation required.
     - `compute_unit_distance_matrix()` - Parallel pairwise RMSE distance computation (4-8x speedup)
     - `loocv_grid_search()` - Parallel LOOCV across tuning parameters (10-50x speedup)
     - `bootstrap_trop_variance()` - Parallel bootstrap variance estimation (5-15x speedup)
+  - **`rust/src/sdid_variance.rs`** - SDID variance estimation acceleration:
+    - `placebo_variance_sdid()` - Parallel placebo SE computation (~8x speedup)
+    - `bootstrap_variance_sdid()` - Parallel bootstrap SE computation (~6x speedup)
   - Uses pure-Rust `faer` library for linear algebra (no external BLAS/LAPACK dependencies)
   - Cross-platform: builds on Linux, macOS, and Windows without additional setup
   - Provides 4-8x speedup for SyntheticDiD, 5-20x speedup for TROP
@@ -373,6 +380,7 @@ See `docs/benchmarks.rst` for full methodology and validation results.
 
 Tests mirror the source modules:
 - `tests/test_estimators.py` - Tests for DifferenceInDifferences, TWFE, MultiPeriodDiD, SyntheticDiD
+- `tests/test_methodology_sdid.py` - Methodology tests for SDID: Frank-Wolfe solver, regularization, sparsification, edge cases
 - `tests/test_staggered.py` - Tests for CallawaySantAnna
 - `tests/test_sun_abraham.py` - Tests for SunAbraham interaction-weighted estimator
 - `tests/test_imputation.py` - Tests for ImputationDiD (Borusyak et al. 2024) estimator
