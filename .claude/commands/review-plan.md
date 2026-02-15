@@ -445,6 +445,8 @@ After displaying the review in the conversation (Step 5), persist it to a file a
    ---
    ```
 
+   The `plan:` value must be the plan file path as resolved in Step 1 — the same path used throughout this skill invocation. The hook expands `~` to `$HOME` before comparison, so `~/...` paths work correctly. The key requirement is that this value, after `~` expansion, exactly matches the plan file path the hook resolves from the sentinel or fallback.
+
    The `flags` field is a list of CLI flags that were active during this review. Possible values: `"--updated"`, `"--pr"`. Empty list `[]` if no flags were used.
 
    Followed by the full review content (everything from "## Overall Assessment" through "## Summary", exactly as displayed in the conversation).

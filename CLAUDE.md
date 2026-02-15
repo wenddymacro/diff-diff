@@ -693,6 +693,7 @@ If review is requested:
    - LOW: skip unless user explicitly requested
    - Checklist gaps: add missing items as plan steps
    - Append a `## Revision Notes` section documenting what was addressed, dismissed, and why
+   - After writing the revised plan, touch the review file to update its mtime (`touch "$REVIEW_FILE"`) so the hook's staleness check passes after the intentional revision
 
 6. **Loop or exit**: If user chose "re-review", go back to step 1 (spawn a fresh review agent for the revised plan). Otherwise, call `ExitPlanMode`.
 

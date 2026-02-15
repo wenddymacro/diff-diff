@@ -17,9 +17,6 @@
 #   - The ls -t fallback (step 3) can pick the wrong plan if multiple files exist.
 #   - A stale sentinel from a prior session can allow a new plan through unreviewed.
 #   The CLAUDE.md guidance mitigates both by updating the sentinel on new plan creation.
-#   - printf %s in deny() does not escape quotes/backslashes in $1. Plan file paths
-#     almost never contain these characters. If needed later, add sanitization:
-#     MSG=$(echo "$1" | sed 's/"/\\"/g')
 #   - The -nt comparison has 1-second granularity on macOS. A plan edited and
 #     reviewed within the same second could produce a false "fresh" result. In
 #     practice, reviews always take longer.
@@ -44,7 +41,9 @@ deny() {
 validate_review_plan_field() {
   local review_file="$1" expected="$2"
   local yaml_plan
-  yaml_plan=$(sed -n '/^---$/,/^---$/{ /^plan:/{ s/^plan:[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//; s/^'"'"'//; s/'"'"'$//; p; q; } }' "$review_file")
+  # Extract YAML frontmatter (lines 2 through next ---), then grep for plan: field.
+  # Uses a pipeline instead of nested sed braces for BSD sed (macOS) compatibility.
+  yaml_plan=$(sed -n '2,/^---$/p' "$review_file" | grep '^plan:' | head -1 | sed 's/^plan:[[:space:]]*//;s/[[:space:]]*$//;s/^"//;s/"$//;s/^'"'"'//;s/'"'"'$//')
   # Expand ~ in the YAML value
   yaml_plan="${yaml_plan/#\~/$HOME}"
   [ "$yaml_plan" = "$expected" ]

@@ -190,7 +190,11 @@ Call `EnterPlanMode` to transition into plan mode. In plan mode:
    - Question #1: <question text — to be resolved during implementation>
    ```
 5. **Write the revised plan** using the Edit or Write tool
-6. **Call `ExitPlanMode`** for user approval
+6. **Touch the review file** to update its mtime so the hook's staleness check passes after an intentional revision:
+   ```bash
+   touch ~/.claude/plans/<plan-basename>.review.md
+   ```
+7. **Call `ExitPlanMode`** for user approval
 
 ### Step 8: Report
 
