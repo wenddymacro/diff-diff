@@ -593,18 +593,19 @@ class TwoStageDiD:
         # Check for always-treated units
         min_time = df[time].min()
         always_treated_mask = (~df["_never_treated"]) & (df[first_treat] <= min_time)
-        n_always_treated = df.loc[always_treated_mask, unit].nunique()
+        always_treated_units = df.loc[always_treated_mask, unit].unique()
+        n_always_treated = len(always_treated_units)
         if n_always_treated > 0:
+            unit_list = ", ".join(str(u) for u in always_treated_units[:10])
+            suffix = f" (and {n_always_treated - 10} more)" if n_always_treated > 10 else ""
             warnings.warn(
                 f"{n_always_treated} unit(s) are treated in all observed periods "
-                f"(first_treat <= {min_time}). These units have no untreated "
-                "observations and cannot contribute to the counterfactual model. "
-                "Excluding from estimation.",
+                f"(first_treat <= {min_time}): [{unit_list}{suffix}]. "
+                "These units have no untreated observations and cannot contribute "
+                "to the counterfactual model. Excluding from estimation.",
                 UserWarning,
                 stacklevel=2,
             )
-            # Exclude always-treated units
-            always_treated_units = df.loc[always_treated_mask, unit].unique()
             df = df[~df[unit].isin(always_treated_units)].copy()
 
         # Treatment indicator with anticipation
@@ -1183,11 +1184,25 @@ class TwoStageDiD:
                 for g, horizons in cohort_rel_times.items():
                     if required_range.issubset(horizons):
                         balanced_cohorts.add(g)
-            balance_mask = (
-                df[first_treat].isin(balanced_cohorts).values
-                if balanced_cohorts
-                else np.ones(n, dtype=bool)
-            )
+            if not balanced_cohorts:
+                warnings.warn(
+                    f"No cohorts satisfy balance_e={balance_e} requirement. "
+                    "Event study results will contain only the reference period. "
+                    "Consider reducing balance_e.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                return {
+                    ref_period: {
+                        "effect": 0.0,
+                        "se": 0.0,
+                        "t_stat": np.nan,
+                        "p_value": np.nan,
+                        "conf_int": (0.0, 0.0),
+                        "n_obs": 0,
+                    }
+                }
+            balance_mask = df[first_treat].isin(balanced_cohorts).values
         else:
             balance_mask = np.ones(n, dtype=bool)
 
@@ -1724,7 +1739,7 @@ class TwoStageDiD:
         original_event_study: Optional[Dict[int, Dict[str, Any]]],
         original_group: Optional[Dict[Any, Dict[str, Any]]],
         aggregate: Optional[str],
-    ) -> TwoStageBootstrapResults:
+    ) -> Optional[TwoStageBootstrapResults]:
         """Run multiplier bootstrap on GMM influence function."""
         if self.n_bootstrap < 50:
             warnings.warn(
@@ -1738,12 +1753,23 @@ class TwoStageDiD:
 
         from diff_diff.staggered_bootstrap import _generate_bootstrap_weights_batch
 
-        y_tilde = df["_y_tilde"].values
+        y_tilde = df["_y_tilde"].values.copy()  # .copy() to avoid mutating df column
         n = len(df)
         cluster_ids = df[cluster_var].values
 
+        # Handle NaN y_tilde (from unidentified FEs) — matches _stage2_static logic
+        nan_mask = ~np.isfinite(y_tilde)
+        if nan_mask.any():
+            y_tilde[nan_mask] = 0.0
+
         # --- Static specification bootstrap ---
-        D = omega_1_mask.values.astype(float)
+        D = omega_1_mask.values.astype(float)  # .astype() already creates a copy
+        D[nan_mask] = 0.0  # Exclude NaN y_tilde obs from bootstrap estimation
+
+        # Degenerate case: all treated obs have NaN y_tilde
+        if D.sum() == 0:
+            return None
+
         X_2_static = D.reshape(-1, 1)
         coef_static = solve_ols(X_2_static, y_tilde, return_vcov=False)[0]
         eps_2_static = y_tilde - X_2_static @ coef_static
@@ -1811,11 +1837,10 @@ class TwoStageDiD:
                     for g, horizons in cohort_rel_times.items():
                         if required_range.issubset(horizons):
                             balanced_cohorts.add(g)
-                balance_mask = (
-                    df[first_treat].isin(balanced_cohorts).values
-                    if balanced_cohorts
-                    else np.ones(n, dtype=bool)
-                )
+                if not balanced_cohorts:
+                    all_horizons = []  # No qualifying cohorts -> skip event study bootstrap
+                else:
+                    balance_mask = df[first_treat].isin(balanced_cohorts).values
             else:
                 balance_mask = np.ones(n, dtype=bool)
 
@@ -1827,6 +1852,8 @@ class TwoStageDiD:
                 for i in range(n):
                     if not balance_mask[i]:
                         continue
+                    if nan_mask[i]:
+                        continue  # NaN y_tilde -> exclude from bootstrap event study
                     h = rel_times[i]
                     if np.isfinite(h):
                         h_int = int(h)
@@ -1890,6 +1917,8 @@ class TwoStageDiD:
             treated_mask = omega_1_mask.values
             for i in range(n):
                 if treated_mask[i]:
+                    if nan_mask[i]:
+                        continue  # NaN y_tilde -> exclude from group bootstrap
                     g = ft_vals[i]
                     if g in group_to_col:
                         X_2_grp[i, group_to_col[g]] = 1.0

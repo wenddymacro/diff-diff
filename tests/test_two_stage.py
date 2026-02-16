@@ -723,6 +723,77 @@ class TestTwoStageDiDEdgeCases:
             if results.event_study_effects[h].get("n_obs", 0) > 0:
                 assert abs(h) <= 2
 
+    def test_always_treated_warning_lists_unit_ids(self):
+        """Always-treated warning should include affected unit IDs."""
+        data = generate_test_data()
+
+        # Add two always-treated units (first_treat before min_time=0)
+        always_treated = pd.DataFrame(
+            {
+                "unit": np.repeat([997, 998], 10),
+                "time": np.tile(np.arange(10), 2),
+                "outcome": np.random.default_rng(42).standard_normal(20),
+                "first_treat": np.repeat([-1, -2], 10),
+            }
+        )
+        data_with_always = pd.concat([data, always_treated], ignore_index=True)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            TwoStageDiD().fit(
+                data_with_always,
+                outcome="outcome",
+                unit="unit",
+                time="time",
+                first_treat="first_treat",
+            )
+            always_warns = [x for x in w if "treated in all observed periods" in str(x.message)]
+            assert len(always_warns) == 1
+            msg = str(always_warns[0].message)
+            assert "997" in msg
+            assert "998" in msg
+
+    def test_bootstrap_with_nan_y_tilde(self, ci_params):
+        """Bootstrap should handle NaN y_tilde from unidentified FEs."""
+        # No never-treated units: cohorts 3, 5, 7 on periods 0-9 means
+        # periods 7-9 have zero untreated obs -> NaN y_tilde
+        data = generate_test_data(never_treated_frac=0.0)
+        n_boot = ci_params.bootstrap(20)
+
+        results = TwoStageDiD(n_bootstrap=n_boot).fit(
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
+        )
+
+        assert np.isfinite(results.overall_att)
+        assert results.overall_se > 0
+
+    def test_balance_e_empty_cohorts_warns(self):
+        """Unreasonably large balance_e should warn when no cohorts qualify."""
+        data = generate_test_data()
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            results = TwoStageDiD().fit(
+                data,
+                outcome="outcome",
+                unit="unit",
+                time="time",
+                first_treat="first_treat",
+                aggregate="event_study",
+                balance_e=100,  # No cohort can satisfy this
+            )
+            balance_warns = [x for x in w if "No cohorts satisfy" in str(x.message)]
+            assert len(balance_warns) > 0
+
+        # Event study should contain only the reference period
+        assert len(results.event_study_effects) == 1
+        ref_key = list(results.event_study_effects.keys())[0]
+        assert results.event_study_effects[ref_key]["n_obs"] == 0
+
 
 # =============================================================================
 # TestTwoStageDiDParameters
