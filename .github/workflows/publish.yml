@@ -22,7 +22,7 @@ jobs:
       - name: Build wheels
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
-          for pyver in 39 310 311 312; do
+          for pyver in 39 310 311 312 313; do
             pybin="/opt/python/cp${pyver}-cp${pyver}/bin/python"
             if [ -f "$pybin" ]; then
               /opt/python/cp312-cp312/bin/maturin build --release --out dist -i "$pybin" --features extension-module
@@ -42,7 +42,7 @@ jobs:
     runs-on: macos-14
     strategy:
       matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12']
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
     steps:
       - uses: actions/checkout@v4
 
@@ -72,7 +72,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12']
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
     steps:
       - uses: actions/checkout@v4
 

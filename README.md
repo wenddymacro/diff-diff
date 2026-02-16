@@ -2452,7 +2452,7 @@ Returns DataFrame with columns: `unit`, `quality_score`, `outcome_trend_score`, 
 
 ## Requirements
 
-- Python >= 3.9
+- Python 3.9 - 3.13
 - numpy >= 1.20
 - pandas >= 1.3
 - scipy >= 1.7

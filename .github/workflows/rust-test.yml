@@ -45,12 +45,13 @@ jobs:
 
   # Build and test with Python on multiple platforms
   python-tests:
-    name: Python Tests (${{ matrix.os }})
+    name: Python Tests (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.11', '3.13']
 
     steps:
       - uses: actions/checkout@v4
@@ -58,12 +59,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python-version }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install test dependencies
+        # Keep in sync with pyproject.toml [project.dependencies] and [project.optional-dependencies.dev]
         run: pip install pytest pytest-xdist numpy pandas scipy
 
       - name: Build and install with maturin
@@ -141,9 +143,10 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.13'
 
       - name: Install dependencies
+        # Keep in sync with pyproject.toml [project.dependencies] and [project.optional-dependencies.dev]
         run: pip install numpy pandas scipy pytest pytest-xdist
 
       - name: Verify pure Python mode
