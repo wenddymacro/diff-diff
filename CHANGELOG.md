@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.2] - 2026-02-16
+
+### Added
+- **Python 3.13 support** with upper version cap (`>=3.9,<3.14`)
+
+### Changed
+- **Sun-Abraham methodology review** (PR #153)
+  - IW aggregation weights now use event-time observation counts (not group sizes)
+  - Normalize `np.inf` never-treated encoding before treatment group detection
+  - Add R benchmark scripts and methodology-aligned tests
+- Use `rank_deficient_action` and `np.errstate` instead of broad `RuntimeWarning` filter in SDID tutorial
+
+### Fixed
+- Sun-Abraham bootstrap NaN propagation for non-finite ATT estimates
+- Sun-Abraham df_adjustment off-by-one in analytical SE computation
+- CI pandas compatibility for SunAbraham bootstrap inference
+- SyntheticDiD tutorial: eliminate pre-treatment fit warnings
+
 ## [2.3.1] - 2026-02-15
 
 ### Fixed
@@ -701,6 +719,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `to_dict()` and `to_dataframe()` export methods
   - `is_significant` and `significance_stars` properties
 
+[2.3.2]: https://github.com/igerber/diff-diff/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/igerber/diff-diff/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/igerber/diff-diff/compare/v2.2.1...v2.3.0
 [2.2.1]: https://github.com/igerber/diff-diff/compare/v2.2.0...v2.2.1
