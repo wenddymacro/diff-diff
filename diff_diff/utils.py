@@ -147,6 +147,40 @@ def compute_p_value(t_stat: float, df: Optional[int] = None, two_sided: bool = T
     return float(p_value)
 
 
+def safe_inference(effect, se, alpha=0.05, df=None):
+    """Compute t_stat, p_value, conf_int with NaN-safe gating.
+
+    When SE is non-finite, zero, or negative, ALL inference fields
+    are set to NaN to prevent misleading statistical output.
+
+    Accepts scalar inputs only (not numpy arrays). All existing inference
+    call sites operate on scalars within loops.
+
+    Parameters
+    ----------
+    effect : float
+        Point estimate (treatment effect or coefficient).
+    se : float
+        Standard error of the estimate.
+    alpha : float, optional
+        Significance level for confidence interval (default 0.05).
+    df : int, optional
+        Degrees of freedom. If None, uses normal distribution.
+
+    Returns
+    -------
+    tuple
+        (t_stat, p_value, (ci_lower, ci_upper)). All NaN when SE is
+        non-finite, zero, or negative.
+    """
+    if not (np.isfinite(se) and se > 0):
+        return np.nan, np.nan, (np.nan, np.nan)
+    t_stat = effect / se
+    p_value = compute_p_value(t_stat, df=df)
+    conf_int = compute_confidence_interval(effect, se, alpha, df=df)
+    return t_stat, p_value, conf_int
+
+
 # =============================================================================
 # Wild Cluster Bootstrap
 # =============================================================================

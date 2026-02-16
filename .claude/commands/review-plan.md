@@ -238,6 +238,13 @@ For methodology-critical code:
 - NaN propagation through ALL inference fields (SE, t-stat, p-value, CI)
 - Empty inputs / empty result sets
 - Boundary conditions (single observation, single group, etc.)
+- **Registry cross-check** (for plans modifying estimator math/SE/inference):
+  - Read the relevant estimator section in `docs/methodology/REGISTRY.md`
+  - For each equation the plan implements: verify it matches the Registry, or the plan documents the deviation
+  - For each edge case in the Registry's "Edge cases" section: verify the plan handles it or explicitly defers it
+  - CRITICAL if plan contradicts a Registry equation without documented deviation
+  - MEDIUM if plan doesn't handle a documented Registry edge case
+  - LOW if plan adds new edge case handling not yet in Registry (suggest updating it)
 
 For all code:
 - Error handling paths — are they tested with behavioral assertions (not just "runs without exception")?
@@ -350,6 +357,11 @@ Present the review in the following format. Number each issue sequentially withi
 Cross-reference against the relevant CLAUDE.md checklists. List which checklist items are not addressed by the plan.
 
 [Identify which CLAUDE.md checklist applies (e.g., "Adding a New Parameter to Estimators", "Implementing Methodology-Critical Code", "Fixing Bugs Across Multiple Locations") and list any items from that checklist that the plan doesn't cover.]
+
+**Registry Alignment** (if methodology files changed):
+- [ ] Plan equations match REGISTRY.md (or deviations documented)
+- [ ] All Registry edge cases handled or explicitly out-of-scope
+- [ ] REGISTRY.md updated if new edge cases discovered
 
 ---
 

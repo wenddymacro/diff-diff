@@ -27,19 +27,38 @@ Categorize files into:
 
 ### 2. Run Automated Pattern Checks
 
-#### 2.1 NaN Handling Pattern Check (for methodology files)
+#### 2.1 Inference & Parameter Pattern Checks (for methodology files)
 
-If any methodology files changed, run these pattern checks:
+If any methodology files changed, run these pattern checks on the **changed methodology files only**:
 
+**Check A — Inline inference computation**:
 ```bash
-# Check for bad t-stat pattern (should use np.nan, not 0.0 or 0)
-grep -n "if.*se.*>.*0.*else 0" diff_diff/*.py || true
-
-# Check for potential division issues without NaN handling
-grep -E -n "/[[:space:]]*se\>" diff_diff/*.py | grep -v "np.nan" | grep -v "#" || true
+grep -n "t_stat\s*=\s*[^#]*/ *se" <changed-methodology-files> | grep -v "safe_inference"
 ```
+Flag each match: "Consider using `safe_inference()` from `diff_diff.utils` instead of inline t_stat computation."
 
-**Report findings**: If matches found, warn about potential NaN handling issues.
+**Check B — Zero-SE fallback to 0.0 instead of NaN**:
+```bash
+grep -En "if.*(se|SE).*>.*0.*else\s+(0\.0|0)\b" <changed-methodology-files>
+```
+Flag each match: "SE=0 should produce NaN, not 0.0, for inference fields."
+
+**Check C — New `self.X` in `__init__` not in `get_params()`**:
+```bash
+# Extract new self.X assignments from diff
+git diff HEAD -- <changed-methodology-files> | grep "^+" | grep "self\.\w\+ = \w\+" | sed 's/.*self\.\(\w\+\).*/\1/' | sort -u
+# For each extracted param name, check if it appears in get_params()
+grep "get_params" <changed-methodology-files> -A 30 | grep "<param_name>"
+```
+Flag missing params: "New parameter `X` stored in `__init__` but not found in `get_params()` return dict."
+
+**Check D — `compute_confidence_interval` called without NaN guard**:
+```bash
+grep -n "compute_confidence_interval" <changed-methodology-files> | grep -v "safe_inference\|if.*isfinite\|if.*se.*>"
+```
+Flag each match: "Verify CI computation handles non-finite SE (use `safe_inference()` or add guard)."
+
+**Report findings**: If matches found, list each with file:line and the recommended fix.
 
 #### 2.2 Test Existence Check
 
@@ -76,6 +95,17 @@ grep -n "^    def [^_]" <changed-py-files> | head -10
 ```
 
 Note: This is a heuristic. Verify docstrings exist for new public functions.
+
+#### 2.4 Docstring Staleness Check (for changed .py files)
+
+For functions with changed signatures, verify their docstrings are up to date:
+
+```bash
+# Find functions with changed signatures
+git diff HEAD -- <changed-py-files> | grep "^+.*def " | head -10
+```
+
+For each changed function, flag: "Verify docstring Parameters section matches updated signature for: `<function_name>`"
 
 ### 3. Display Context-Specific Checklist
 
