@@ -1275,9 +1275,21 @@ class TwoStageDiD:
 
         for h in est_horizons:
             j = horizon_to_col[h]
+            n_obs = int(np.sum(X_2[:, j]))
+
+            if n_obs == 0:
+                event_study_effects[h] = {
+                    "effect": np.nan,
+                    "se": np.nan,
+                    "t_stat": np.nan,
+                    "p_value": np.nan,
+                    "conf_int": (np.nan, np.nan),
+                    "n_obs": 0,
+                }
+                continue
+
             effect = float(coef[j])
             se = float(np.sqrt(max(V[j, j], 0.0)))
-            n_obs = int(np.sum(X_2[:, j]))
 
             t_stat = effect / se if np.isfinite(se) and se > 0 else np.nan
             p_val = compute_p_value(t_stat)
@@ -1358,9 +1370,21 @@ class TwoStageDiD:
         group_effects: Dict[Any, Dict[str, Any]] = {}
         for g in treatment_groups:
             j = group_to_col[g]
+            n_obs = int(np.sum(X_2[:, j]))
+
+            if n_obs == 0:
+                group_effects[g] = {
+                    "effect": np.nan,
+                    "se": np.nan,
+                    "t_stat": np.nan,
+                    "p_value": np.nan,
+                    "conf_int": (np.nan, np.nan),
+                    "n_obs": 0,
+                }
+                continue
+
             effect = float(coef[j])
             se = float(np.sqrt(max(V[j, j], 0.0)))
-            n_obs = int(np.sum(X_2[:, j]))
 
             t_stat = effect / se if np.isfinite(se) and se > 0 else np.nan
             p_val = compute_p_value(t_stat)

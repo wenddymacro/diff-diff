@@ -610,7 +610,7 @@ where `psi_i` is the stacked influence function for unit i across all its observ
 
 *Bootstrap:*
 
-Our implementation uses multiplier bootstrap on the GMM influence function: cluster-level `psi` sums are pre-computed, then perturbed with Rademacher/Mammen/Webb weights. The R `did2s` package defaults to block bootstrap (resampling clusters with replacement). Both approaches are asymptotically valid; the multiplier bootstrap is computationally cheaper and consistent with the CallawaySantAnna/ImputationDiD bootstrap patterns in this library.
+Our implementation uses multiplier bootstrap on the GMM influence function: cluster-level `psi` sums are pre-computed, then perturbed with Rademacher weights. The R `did2s` package defaults to block bootstrap (resampling clusters with replacement). Both approaches are asymptotically valid; the multiplier bootstrap is computationally cheaper and consistent with the CallawaySantAnna/ImputationDiD bootstrap patterns in this library.
 
 *Edge cases:*
 - **Always-treated units:** Units treated in all observed periods have no untreated observations for Stage 1 FE estimation. These are excluded with a warning listing the affected unit IDs. Their treated observations do NOT contribute to Stage 2.
@@ -620,6 +620,8 @@ Our implementation uses multiplier bootstrap on the GMM influence function: clus
 - **Event study aggregation:** Horizon-specific effects use the same two-stage procedure with horizon indicator dummies in Stage 2. Unidentified horizons (e.g., long-run effects without never-treated units, per Proposition 5 of Borusyak et al. 2024) produce NaN.
 - **balance_e with no qualifying cohorts:** If no cohorts have sufficient pre/post coverage for the requested `balance_e`, a warning is emitted and event study results contain only the reference period.
 - **No never-treated units:** Long-run effects may be unidentified (same limitation as ImputationDiD). Warning emitted for affected horizons.
+- **Zero-observation horizons after filtering:** When `balance_e` or NaN `y_tilde` filtering results in zero observations for some event study horizons, those horizons produce NaN for all inference fields (effect, SE, t-stat, p-value, CI) with n_obs=0. This differs from the Proposition 5 case (unidentified long-run effects) which has observations but unidentified counterfactual.
+- **Zero-observation cohorts in group effects:** If all treated observations for a cohort have NaN `y_tilde` (excluded from estimation), that cohort's group effect is NaN with n_obs=0.
 
 **Reference implementation(s):**
 - R: `did2s::did2s()` (Kyle Butts & John Gardner)

@@ -794,6 +794,71 @@ class TestTwoStageDiDEdgeCases:
         ref_key = list(results.event_study_effects.keys())[0]
         assert results.event_study_effects[ref_key]["n_obs"] == 0
 
+    def test_event_study_nan_for_zero_obs_horizons(self):
+        """Zero-observation horizons from NaN y_tilde produce NaN inference."""
+        # No never-treated: cohorts 3, 5, 7; periods 0-9.
+        # Periods 7-9 have zero untreated obs → NaN y_tilde.
+        # Horizon 4 = cohort 3 at period 7 (NaN) + cohort 5 at period 9 (NaN) → 0 obs.
+        # Horizons 5, 6 = cohort 3 at periods 8, 9 (NaN) → 0 obs.
+        # Horizons 0-3 have valid observations from multiple cohorts.
+        data = generate_test_data(never_treated_frac=0.0)
+        results = TwoStageDiD().fit(
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
+            aggregate="event_study",
+        )
+
+        assert results.event_study_effects is not None
+
+        # Horizons 0-3 should have observations and finite effects
+        for h in range(0, 4):
+            eff = results.event_study_effects[h]
+            assert eff["n_obs"] > 0, f"Horizon {h} should have observations"
+            assert np.isfinite(eff["effect"]), f"Horizon {h} effect should be finite"
+
+        # Horizons 4, 5, 6 should have zero obs and NaN inference
+        for h in [4, 5, 6]:
+            eff = results.event_study_effects[h]
+            assert eff["n_obs"] == 0, f"Horizon {h} should have 0 observations"
+            assert np.isnan(eff["effect"]), f"Horizon {h} effect should be NaN"
+            assert np.isnan(eff["se"]), f"Horizon {h} SE should be NaN"
+            assert np.isnan(eff["t_stat"]), f"Horizon {h} t_stat should be NaN"
+            assert np.isnan(eff["p_value"]), f"Horizon {h} p_value should be NaN"
+            assert np.isnan(eff["conf_int"][0]), f"Horizon {h} CI lower should be NaN"
+
+    def test_group_effects_nan_for_all_nan_cohort(self):
+        """Cohort with all NaN y_tilde produces NaN group effect."""
+        # No never-treated units: cohorts 3, 5, 7; periods 0-9.
+        # Periods 7, 8, 9 have zero untreated obs (all 3 cohorts treated by t=7).
+        # Cohort 7: treated at periods 7-9, all have NaN y_tilde -> n_obs=0.
+        # Cohorts 3, 5: have some valid treated periods -> n_obs > 0.
+        data = generate_test_data(never_treated_frac=0.0)
+        results = TwoStageDiD().fit(
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
+            aggregate="group",
+        )
+
+        assert results.group_effects is not None
+
+        # Cohorts 3 and 5 should have valid effects
+        for g in [3, 5]:
+            eff = results.group_effects[g]
+            assert eff["n_obs"] > 0, f"Cohort {g} should have observations"
+            assert np.isfinite(eff["effect"]), f"Cohort {g} effect should be finite"
+
+        # Cohort 7: all treated obs have NaN y_tilde -> zero obs -> NaN
+        eff_7 = results.group_effects[7]
+        assert eff_7["n_obs"] == 0, "Cohort 7 should have 0 observations"
+        assert np.isnan(eff_7["effect"]), "Cohort 7 effect should be NaN"
+        assert np.isnan(eff_7["se"]), "Cohort 7 SE should be NaN"
+
 
 # =============================================================================
 # TestTwoStageDiDParameters
