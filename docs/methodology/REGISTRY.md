@@ -12,6 +12,7 @@ This document provides the academic foundations and key implementation requireme
    - [CallawaySantAnna](#callawaysantanna)
    - [SunAbraham](#sunabraham)
    - [ImputationDiD](#imputationdid)
+   - [TwoStageDiD](#twostagedid)
 3. [Advanced Estimators](#advanced-estimators)
    - [SyntheticDiD](#syntheticdid)
    - [TripleDifference](#tripledifference)
@@ -562,6 +563,79 @@ Y_it = alpha_i + beta_t [+ X'_it * delta] + W'_it * gamma + epsilon_it
 - [x] Pre-trend test uses only untreated observations (Test 1, Equation 9)
 - [x] Supports balanced and unbalanced panels (iterative Gauss-Seidel demeaning for exact FE)
 - [x] Event study and group aggregation
+
+---
+
+## TwoStageDiD
+
+**Primary source:** [Gardner, J. (2022). Two-stage differences in differences. arXiv:2207.05943.](https://arxiv.org/abs/2207.05943)
+
+**Key implementation requirements:**
+
+*Assumption checks / warnings:*
+- **Parallel trends (same as ImputationDiD):** `E[Y_it(0)] = alpha_i + beta_t` for all observations.
+- **No-anticipation effects:** `Y_it = Y_it(0)` for all untreated observations.
+- Treatment must be absorbing: `D_it` switches from 0 to 1 and stays at 1.
+- Always-treated units (treated in all periods) are excluded with a warning, since they have no untreated observations for Stage 1 FE estimation.
+
+*Estimator equation (two-stage procedure, as implemented):*
+
+```
+Stage 1. Estimate unit + time fixed effects on untreated observations only (it in Omega_0):
+    Y_it = alpha_i + beta_t + epsilon_it
+    Compute residuals: y_tilde_it = Y_it - alpha_hat_i - beta_hat_t  (for ALL observations)
+
+Stage 2. Regress residualized outcomes on treatment indicators (on treated observations):
+    y_tilde_it = tau * D_it + eta_it
+    (or event-study specification with horizon indicators)
+```
+
+Point estimates are identical to ImputationDiD (Borusyak et al. 2024). The two-stage procedure is algebraically equivalent to the imputation approach: both estimate unit+time FE on untreated observations and recover treatment effects from the difference between observed and counterfactual outcomes.
+
+*Variance: GMM sandwich (Newey & McFadden 1994 Theorem 6.1):*
+
+The variance accounts for first-stage estimation error propagating into Stage 2, following the GMM framework:
+
+```
+V(tau_hat) = (D'D)^{-1} * Bread * (D'D)^{-1}
+
+Bread = sum_c ( sum_{i in c} psi_i )( sum_{i in c} psi_i )'
+```
+
+where `psi_i` is the stacked influence function for unit i across all its observations, combining the Stage 2 score and the Stage 1 correction term.
+
+**Note on Equation 6 discrepancy:** The paper's Equation 6 uses a per-cluster inverse `(D_c'D_c)^{-1}` when forming the influence function contribution. The R `did2s` implementation and our code use the GLOBAL inverse `(D'D)^{-1}` following standard GMM theory (Newey & McFadden 1994). We follow the R implementation, which is consistent with standard GMM sandwich variance estimation.
+
+**No finite-sample adjustments:** The variance estimator uses the raw asymptotic sandwich without degrees-of-freedom corrections (no HC1-style `n/(n-k)` adjustment). This matches the R `did2s` implementation.
+
+*Bootstrap:*
+
+Our implementation uses multiplier bootstrap on the GMM influence function: cluster-level `psi` sums are pre-computed, then perturbed with Rademacher weights. The R `did2s` package defaults to block bootstrap (resampling clusters with replacement). Both approaches are asymptotically valid; the multiplier bootstrap is computationally cheaper and consistent with the CallawaySantAnna/ImputationDiD bootstrap patterns in this library.
+
+*Edge cases:*
+- **Always-treated units:** Units treated in all observed periods have no untreated observations for Stage 1 FE estimation. These are excluded with a warning listing the affected unit IDs. Their treated observations do NOT contribute to Stage 2.
+- **Rank condition violations:** If the Stage 1 design matrix (unit+time dummies on untreated obs) is rank-deficient, or if certain unit/time FE are unidentified (e.g., a unit with no untreated periods after excluding always-treated), the affected FE produce NaN. Behavior controlled by `rank_deficient_action`: "warn" (default), "error", or "silent".
+- **NaN y_tilde handling:** When Stage 1 FE are unidentified for some observations, the residualized outcome `y_tilde` is NaN. These observations are zeroed out (excluded) from the Stage 2 regression and variance computation, matching the treatment of unimputable observations in ImputationDiD.
+- **NaN inference for undefined statistics:** t_stat uses NaN when SE is non-finite or zero; p_value and CI also NaN. Matches CallawaySantAnna/ImputationDiD NaN convention.
+- **Event study aggregation:** Horizon-specific effects use the same two-stage procedure with horizon indicator dummies in Stage 2. Unidentified horizons (e.g., long-run effects without never-treated units, per Proposition 5 of Borusyak et al. 2024) produce NaN.
+- **balance_e with no qualifying cohorts:** If no cohorts have sufficient pre/post coverage for the requested `balance_e`, a warning is emitted and event study results contain only the reference period.
+- **No never-treated units (Proposition 5):** When there are no never-treated units and multiple treatment cohorts, horizons h >= h_bar (where h_bar = max(groups) - min(groups)) are unidentified per Proposition 5 of Borusyak et al. (2024). These produce NaN inference with n_obs > 0 (treated observations exist but counterfactual is unidentified) and a warning listing affected horizons. Matches ImputationDiD behavior. Proposition 5 applies to event study horizons only, not cohort aggregation — a cohort whose treated obs all fall at Prop 5 horizons naturally gets n_obs=0 in group effects because all its y_tilde values are NaN.
+- **Zero-observation horizons after filtering:** When `balance_e` or NaN `y_tilde` filtering results in zero observations for some non-Prop-5 event study horizons, those horizons produce NaN for all inference fields (effect, SE, t-stat, p-value, CI) with n_obs=0.
+- **Zero-observation cohorts in group effects:** If all treated observations for a cohort have NaN `y_tilde` (excluded from estimation), that cohort's group effect is NaN with n_obs=0.
+
+**Reference implementation(s):**
+- R: `did2s::did2s()` (Kyle Butts & John Gardner)
+
+**Requirements checklist:**
+- [x] Stage 1: OLS on untreated observations only for unit+time FE
+- [x] Stage 2: Regress residualized outcomes on treatment indicators
+- [x] Point estimates match ImputationDiD
+- [x] GMM sandwich variance (Newey & McFadden 1994 Theorem 6.1)
+- [x] Global `(D'D)^{-1}` in variance (matches R `did2s`, not paper Eq. 6)
+- [x] No finite-sample adjustment (raw asymptotic sandwich)
+- [x] Always-treated units excluded with warning
+- [x] Multiplier bootstrap on GMM influence function
+- [x] Event study and overall ATT aggregation
 
 ---
 
@@ -1264,6 +1338,7 @@ should be a deliberate user choice.
 | CallawaySantAnna | Analytical (influence fn) | Multiplier bootstrap |
 | SunAbraham | Cluster-robust + delta method | Pairs bootstrap |
 | ImputationDiD | Conservative clustered (Thm 3) | Multiplier bootstrap (library extension; percentile CIs and empirical p-values, consistent with CS/SA) |
+| TwoStageDiD | GMM sandwich (Newey & McFadden 1994) | Multiplier bootstrap on GMM influence function |
 | SyntheticDiD | Placebo variance (Alg 4) | Unit-level bootstrap (fixed weights) |
 | TripleDifference | HC1 / cluster-robust | Influence function for IPW/DR |
 | TROP | Block bootstrap | — |
@@ -1284,6 +1359,7 @@ should be a deliberate user choice.
 | CallawaySantAnna | did | `att_gt()` |
 | SunAbraham | fixest | `sunab()` |
 | ImputationDiD | didimputation | `did_imputation()` |
+| TwoStageDiD | did2s | `did2s()` |
 | SyntheticDiD | synthdid | `synthdid_estimate()` |
 | TripleDifference | - | (forthcoming) |
 | TROP | - | (forthcoming) |

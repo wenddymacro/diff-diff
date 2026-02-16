@@ -101,6 +101,12 @@ from diff_diff.imputation import (
     ImputationDiDResults,
     imputation_did,
 )
+from diff_diff.two_stage import (
+    TwoStageBootstrapResults,
+    TwoStageDiD,
+    TwoStageDiDResults,
+    two_stage_did,
+)
 from diff_diff.sun_abraham import (
     SABootstrapResults,
     SunAbraham,
@@ -152,6 +158,7 @@ __all__ = [
     "CallawaySantAnna",
     "SunAbraham",
     "ImputationDiD",
+    "TwoStageDiD",
     "TripleDifference",
     "TROP",
     # Bacon Decomposition
@@ -173,6 +180,9 @@ __all__ = [
     "ImputationDiDResults",
     "ImputationBootstrapResults",
     "imputation_did",
+    "TwoStageDiDResults",
+    "TwoStageBootstrapResults",
+    "two_stage_did",
     "TripleDifferenceResults",
     "triple_difference",
     "TROPResults",

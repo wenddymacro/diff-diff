@@ -10,7 +10,7 @@ For past changes and release history, see [CHANGELOG.md](CHANGELOG.md).
 
 diff-diff v2.3.0 is a **production-ready** DiD library with feature parity with R's `did` + `HonestDiD` + `synthdid` ecosystem for core DiD analysis:
 
-- **Core estimators**: Basic DiD, TWFE, MultiPeriod, Callaway-Sant'Anna, Sun-Abraham, Borusyak-Jaravel-Spiess Imputation, Synthetic DiD, Triple Difference (DDD), TROP
+- **Core estimators**: Basic DiD, TWFE, MultiPeriod, Callaway-Sant'Anna, Sun-Abraham, Borusyak-Jaravel-Spiess Imputation, Synthetic DiD, Triple Difference (DDD), TROP, Two-Stage DiD (Gardner 2022)
 - **Valid inference**: Robust SEs, cluster SEs, wild bootstrap, multiplier bootstrap, placebo-based variance
 - **Assumption diagnostics**: Parallel trends tests, placebo tests, Goodman-Bacon decomposition
 - **Sensitivity analysis**: Honest DiD (Rambachan-Roth), Pre-trends power analysis (Roth 2022)
@@ -24,7 +24,7 @@ diff-diff v2.3.0 is a **production-ready** DiD library with feature parity with 
 
 High-value additions building on our existing foundation.
 
-### Gardner's Two-Stage DiD (did2s)
+### Gardner's Two-Stage DiD (did2s) -- IMPLEMENTED (v2.4)
 
 Two-stage approach gaining traction in applied work. First residualizes outcomes, then estimates effects.
 

@@ -111,6 +111,15 @@ cross-platform compilation - no OpenBLAS or Intel MKL installation required.
   - Pre-trend test (Equation 9) via `results.pretrend_test()`
   - Proposition 5: NaN for unidentified long-run horizons without never-treated units
 
+- **`diff_diff/two_stage.py`** - Gardner (2022) Two-Stage DiD estimator:
+  - `TwoStageDiD` - Two-stage estimator: (1) estimate unit+time FE on untreated obs, (2) regress residualized outcomes on treatment indicators
+  - `TwoStageDiDResults` - Results with overall ATT, event study, group effects, per-observation treatment effects
+  - `TwoStageBootstrapResults` - Multiplier bootstrap inference on GMM influence function
+  - `two_stage_did()` - Convenience function
+  - Point estimates identical to ImputationDiD; different variance estimator (GMM sandwich vs. conservative)
+  - Custom `_compute_gmm_variance()` — cannot reuse `compute_robust_vcov()` because correction term uses GLOBAL cross-moment
+  - No finite-sample adjustments (raw asymptotic sandwich, matching R `did2s`)
+
 - **`diff_diff/triple_diff.py`** - Triple Difference (DDD) estimator:
   - `TripleDifference` - Ortiz-Villavicencio & Sant'Anna (2025) estimator for DDD designs
   - `TripleDifferenceResults` - Results with ATT, SEs, cell means, diagnostics
@@ -270,6 +279,7 @@ cross-platform compilation - no OpenBLAS or Intel MKL installation required.
    ├── CallawaySantAnna
    ├── SunAbraham
    ├── ImputationDiD
+   ├── TwoStageDiD
    ├── TripleDifference
    ├── TROP
    ├── SyntheticDiD
@@ -384,6 +394,7 @@ Tests mirror the source modules:
 - `tests/test_staggered.py` - Tests for CallawaySantAnna
 - `tests/test_sun_abraham.py` - Tests for SunAbraham interaction-weighted estimator
 - `tests/test_imputation.py` - Tests for ImputationDiD (Borusyak et al. 2024) estimator
+- `tests/test_two_stage.py` - Tests for TwoStageDiD (Gardner 2022) estimator, including equivalence tests with ImputationDiD
 - `tests/test_triple_diff.py` - Tests for Triple Difference (DDD) estimator
 - `tests/test_trop.py` - Tests for Triply Robust Panel (TROP) estimator
 - `tests/test_bacon.py` - Tests for Goodman-Bacon decomposition

@@ -70,7 +70,7 @@ Signif. codes: '***' 0.001, '**' 0.01, '*' 0.05, '.' 0.1
 - **Wild cluster bootstrap**: Valid inference with few clusters (<50) using Rademacher, Webb, or Mammen weights
 - **Panel data support**: Two-way fixed effects estimator for panel designs
 - **Multi-period analysis**: Event-study style DiD with period-specific treatment effects
-- **Staggered adoption**: Callaway-Sant'Anna (2021), Sun-Abraham (2021), and Borusyak-Jaravel-Spiess (2024) imputation estimators for heterogeneous treatment timing
+- **Staggered adoption**: Callaway-Sant'Anna (2021), Sun-Abraham (2021), Borusyak-Jaravel-Spiess (2024) imputation, and Two-Stage DiD (Gardner 2022) estimators for heterogeneous treatment timing
 - **Triple Difference (DDD)**: Ortiz-Villavicencio & Sant'Anna (2025) estimators with proper covariate handling
 - **Synthetic DiD**: Combined DiD with synthetic control for improved robustness
 - **Triply Robust Panel (TROP)**: Factor-adjusted DiD with synthetic weights (Athey et al. 2025)
@@ -926,6 +926,53 @@ ImputationDiD(
 | Control group | Always uses all untreated obs | Choice of never-treated or not-yet-treated |
 | Inference | Conservative variance (Theorem 3) | Multiplier bootstrap |
 | Pre-trends | Built-in F-test (Equation 9) | Separate testing |
+
+### Two-Stage DiD (Gardner 2022)
+
+Two-Stage DiD addresses TWFE bias in staggered adoption designs by estimating unit and time fixed effects on untreated observations only, then regressing the residualized outcomes on treatment indicators. Point estimates match the Imputation DiD estimator (Borusyak et al. 2024); the key difference is that Two-Stage DiD uses a GMM sandwich variance estimator that accounts for first-stage estimation error, while Imputation DiD uses a conservative variance (Theorem 3).
+
+```python
+from diff_diff import TwoStageDiD
+
+# Basic usage
+est = TwoStageDiD()
+results = est.fit(data, outcome='outcome', unit='unit', time='period', first_treat='first_treat')
+results.print_summary()
+```
+
+**Event study:**
+
+```python
+# Event study aggregation with visualization
+results = est.fit(data, outcome='outcome', unit='unit', time='period',
+                  first_treat='first_treat', aggregate='event_study')
+plot_event_study(results)
+```
+
+**Parameters:**
+
+```python
+TwoStageDiD(
+    anticipation=0,                   # Periods of anticipation effects
+    alpha=0.05,                       # Significance level for CIs
+    cluster=None,                     # Column for cluster-robust SEs (defaults to unit)
+    n_bootstrap=0,                    # Bootstrap iterations (0 = analytical GMM SEs)
+    seed=None,                        # Random seed
+    rank_deficient_action='warn',     # 'warn', 'error', or 'silent'
+    horizon_max=None,                 # Max event-study horizon
+)
+```
+
+**When to use Two-Stage DiD vs Imputation DiD:**
+
+| Aspect | Two-Stage DiD | Imputation DiD |
+|--------|--------------|---------------|
+| Point estimates | Identical | Identical |
+| Variance | GMM sandwich (accounts for first-stage error) | Conservative (Theorem 3, may overcover) |
+| Intuition | Residualize then regress | Impute counterfactuals then aggregate |
+| Reference impl. | R `did2s` package | R `didimputation` package |
+
+Both estimators are the efficient estimator under homogeneous treatment effects, producing shorter confidence intervals than Callaway-Sant'Anna or Sun-Abraham.
 
 ### Triple Difference (DDD)
 
@@ -2104,6 +2151,58 @@ ImputationDiD(
 | `to_dataframe(level)` | Convert to DataFrame ('observation', 'event_study', 'group') |
 | `pretrend_test(n_leads)` | Run pre-trend F-test (Equation 9) |
 
+### TwoStageDiD
+
+```python
+TwoStageDiD(
+    anticipation=0,                   # Periods of anticipation effects
+    alpha=0.05,                       # Significance level for CIs
+    cluster=None,                     # Column for cluster-robust SEs (defaults to unit)
+    n_bootstrap=0,                    # Bootstrap iterations (0 = analytical GMM SEs)
+    seed=None,                        # Random seed
+    rank_deficient_action='warn',     # 'warn', 'error', or 'silent'
+    horizon_max=None,                 # Max event-study horizon
+)
+```
+
+**fit() Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `data` | DataFrame | Panel data |
+| `outcome` | str | Outcome variable column name |
+| `unit` | str | Unit identifier column |
+| `time` | str | Time period column |
+| `first_treat` | str | First treatment period column (0 for never-treated) |
+| `covariates` | list | Covariate column names |
+| `aggregate` | str | Aggregation: None, "event_study", "group", "all" |
+| `balance_e` | int | Balance event study to this many pre-treatment periods |
+
+### TwoStageDiDResults
+
+**Attributes:**
+
+| Attribute | Description |
+|-----------|-------------|
+| `overall_att` | Overall average treatment effect on the treated |
+| `overall_se` | Standard error (GMM sandwich variance) |
+| `overall_t_stat` | T-statistic |
+| `overall_p_value` | P-value for H0: ATT = 0 |
+| `overall_conf_int` | Confidence interval |
+| `event_study_effects` | Dict of relative time -> effect dict (if `aggregate='event_study'` or `'all'`) |
+| `group_effects` | Dict of cohort -> effect dict (if `aggregate='group'` or `'all'`) |
+| `treatment_effects` | DataFrame of unit-level treatment effects |
+| `n_treated_obs` | Number of treated observations |
+| `n_untreated_obs` | Number of untreated observations |
+
+**Methods:**
+
+| Method | Description |
+|--------|-------------|
+| `summary(alpha)` | Get formatted summary string |
+| `print_summary(alpha)` | Print summary to stdout |
+| `to_dataframe(level)` | Convert to DataFrame ('observation', 'event_study', 'group') |
+
 ### TripleDifference
 
 ```python
@@ -2581,6 +2680,10 @@ The `HonestDiD` module implements sensitivity analysis methods for relaxing the 
 - **Sant'Anna, P. H. C., & Zhao, J. (2020).** "Doubly Robust Difference-in-Differences Estimators." *Journal of Econometrics*, 219(1), 101-122. [https://doi.org/10.1016/j.jeconom.2020.06.003](https://doi.org/10.1016/j.jeconom.2020.06.003)
 
 - **Sun, L., & Abraham, S. (2021).** "Estimating Dynamic Treatment Effects in Event Studies with Heterogeneous Treatment Effects." *Journal of Econometrics*, 225(2), 175-199. [https://doi.org/10.1016/j.jeconom.2020.09.006](https://doi.org/10.1016/j.jeconom.2020.09.006)
+
+- **Gardner, J. (2022).** "Two-stage differences in differences." *arXiv preprint arXiv:2207.05943*. [https://arxiv.org/abs/2207.05943](https://arxiv.org/abs/2207.05943)
+
+- **Butts, K., & Gardner, J. (2022).** "did2s: Two-Stage Difference-in-Differences." *The R Journal*, 14(1), 162-173. [https://doi.org/10.32614/RJ-2022-048](https://doi.org/10.32614/RJ-2022-048)
 
 - **de Chaisemartin, C., & D'Haultfœuille, X. (2020).** "Two-Way Fixed Effects Estimators with Heterogeneous Treatment Effects." *American Economic Review*, 110(9), 2964-2996. [https://doi.org/10.1257/aer.20181169](https://doi.org/10.1257/aer.20181169)
 
