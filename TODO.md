@@ -12,8 +12,8 @@ Current limitations that may affect users:
 
 | Issue | Location | Priority | Notes |
 |-------|----------|----------|-------|
-| MultiPeriodDiD wild bootstrap not supported | `estimators.py:1068-1074` | Low | Edge case |
-| `predict()` raises NotImplementedError | `estimators.py:532-554` | Low | Rarely needed |
+| MultiPeriodDiD wild bootstrap not supported | `estimators.py:779-785` | Low | Edge case |
+| `predict()` raises NotImplementedError | `estimators.py:568-587` | Low | Rarely needed |
 
 ## Code Quality
 
@@ -23,60 +23,54 @@ Target: < 1000 lines per module for maintainability.
 
 | File | Lines | Action |
 |------|-------|--------|
-| ~~`staggered.py`~~ | ~~2301~~ 1066 | ✅ Split into staggered.py, staggered_bootstrap.py, staggered_aggregation.py, staggered_results.py |
+| ~~`staggered.py`~~ | ~~2301~~ 1120 | ✅ Split into staggered.py, staggered_bootstrap.py, staggered_aggregation.py, staggered_results.py |
 | ~~`prep.py`~~ | ~~1993~~ 1241 | ✅ Split: DGP functions moved to `prep_dgp.py` (777 lines) |
-| `trop.py` | 1703 | Monitor size |
-| `visualization.py` | 1627 | Acceptable but growing |
-| `honest_did.py` | 1493 | Acceptable |
-| `utils.py` | 1481 | Acceptable |
+| `trop.py` | 2904 | **Needs split** -- nearly 3x the 1000-line target |
+| `imputation.py` | 2480 | **Needs split** -- results, bootstrap, aggregation like staggered |
+| `two_stage.py` | 2209 | **Needs split** -- same pattern as imputation |
+| `utils.py` | 1879 | **Needs split** -- legacy placebo functions could move to diagnostics |
+| `visualization.py` | 1678 | Monitor -- growing but cohesive |
+| `linalg.py` | 1537 | Monitor -- unified backend, splitting would hurt cohesion |
+| `honest_did.py` | 1511 | Acceptable |
 | `power.py` | 1350 | Acceptable |
-| `triple_diff.py` | 1291 | Acceptable |
-| `sun_abraham.py` | 1176 | Acceptable |
-| `pretrends.py` | 1160 | Acceptable |
-| `bacon.py` | 1027 | OK |
+| `triple_diff.py` | 1322 | Acceptable |
+| `sun_abraham.py` | 1227 | Acceptable |
+| `estimators.py` | 1161 | Acceptable |
+| `pretrends.py` | 1104 | Acceptable |
 
-### NaN Handling for Undefined t-statistics
+### ~~NaN Handling for Undefined t-statistics~~ -- DONE
 
-Several estimators return `0.0` for t-statistic when SE is 0 or undefined. This is incorrect—a t-stat of 0 implies a null effect, whereas `np.nan` correctly indicates undefined inference.
+All 7 t_stat locations fixed (diagnostics.py, sun_abraham.py, triple_diff.py) -- all now use `np.nan` or `np.isfinite()` guards. Fixed in PR #118 and follow-up PRs.
 
-**Pattern to fix**: `t_stat = effect / se if se > 0 else 0.0` → `t_stat = effect / se if se > 0 else np.nan`
-
-| Location | Line | Current Code |
-|----------|------|--------------|
-| `diagnostics.py` | 665 | `t_stat = original_att / se if se > 0 else 0.0` |
-| `diagnostics.py` | 786 | `t_stat = mean_effect / se if se > 0 else 0.0` |
-| `sun_abraham.py` | 603 | `overall_t = overall_att / overall_se if overall_se > 0 else 0.0` |
-| `sun_abraham.py` | 626 | `overall_t = overall_att / overall_se if overall_se > 0 else 0.0` |
-| `sun_abraham.py` | 643 | `eff_val / se_val if se_val > 0 else 0.0` |
-| `sun_abraham.py` | 881 | `t_stat = agg_effect / agg_se if agg_se > 0 else 0.0` |
-| `triple_diff.py` | 601 | `t_stat = att / se if se > 0 else 0.0` |
-
-**Priority**: Medium - affects inference reporting in edge cases.
-
-**Note**: CallawaySantAnna was fixed in PR #97 to use `np.nan`. These other estimators should follow the same pattern.
+**Remaining nuance**: `diagnostics.py:785` still has `se = ... else 0.0` for the SE variable itself (not t_stat). The downstream t_stat line correctly returns `np.nan`, so inference is safe, but the SE value of 0.0 is technically incorrect for an undefined SE.
 
 ### Migrate Existing Inference Call Sites to `safe_inference()`
 
-`safe_inference()` was added to `diff_diff/utils.py` to compute t_stat, p_value, and CI together with a NaN gate at the top. It is now the prescribed pattern for all new code (see CLAUDE.md design pattern #7). However, ~20 existing inline inference computations across 12 files have **not** been migrated yet.
+`safe_inference()` was added to `diff_diff/utils.py` to compute t_stat, p_value, and CI together with a NaN gate at the top. It is now the prescribed pattern for all new code (see CLAUDE.md design pattern #7). However, ~26 existing inline inference computations across 12 files have **not** been migrated yet.
 
 **Files with inline inference to migrate:**
 
 | File | Approx. Locations |
 |------|-------------------|
-| `estimators.py` | 1 |
-| `sun_abraham.py` | 4 |
-| `staggered.py` | 4 |
-| `staggered_aggregation.py` | 2 |
-| `triple_diff.py` | 1 |
-| `imputation.py` | 2 |
-| `diagnostics.py` | 2 |
-| `synthetic_did.py` | 1 |
-| `trop.py` | 2 |
+| `estimators.py` | 2 (lines 1038, 1089) |
+| `sun_abraham.py` | 4 (lines 621, 644, 661, 905) |
+| `staggered.py` | 6 (lines 696, 725, 763, 777, 792, 806) |
+| `staggered_aggregation.py` | 2 (lines 407, 479) |
+| `triple_diff.py` | 1 (line 601) |
+| `imputation.py` | 2 (lines 1806, 1927) |
+| `two_stage.py` | 2 (lines 1325, 1431) |
+| `diagnostics.py` | 2 (lines 665, 786) |
+| `synthetic_did.py` | 1 (line 426) |
+| `trop.py` | 2 (lines 1474, 2054) |
+| `utils.py` | 1 (line 641) |
+| `linalg.py` | 1 (line 1310) |
 
 **How to find them:**
 ```bash
-grep -n "t_stat[[:space:]]*=[[:space:]]*[^#]*/ *se" diff_diff/*.py | grep -v "safe_inference"
+grep -En "(t_stat|overall_t)\s*=\s*[^#]*/|\[.t_stat.\]\s*=\s*[^#]*/" diff_diff/*.py | grep -v "def safe_inference"
 ```
+
+**Note**: This command has one false positive (`utils.py:178`, inside the `safe_inference()` body) and misses multi-line expressions (e.g., `sun_abraham.py:660-661`). The table above is the authoritative list.
 
 **Migration pattern:**
 ```python
@@ -91,6 +85,42 @@ t_stat, p_value, ci = safe_inference(effect, se, alpha=alpha, df=df)
 ```
 
 **Priority**: Medium — the NaN-handling table above covers the worst cases (those using `0.0`). The remaining sites may use partial guards but should still be migrated for consistency and to prevent regressions.
+
+---
+
+### Tech Debt from Code Reviews
+
+Deferred items from PR reviews that were not addressed before merge.
+
+#### Methodology/Correctness
+
+| Issue | Location | PR | Priority |
+|-------|----------|----|----------|
+| TwoStageDiD & ImputationDiD bootstrap hardcodes Rademacher only; no `bootstrap_weights` parameter unlike CallawaySantAnna | `two_stage.py:1860`, `imputation.py:2363` | #156, #141 | Medium |
+| TwoStageDiD GMM score logic duplicated between analytic/bootstrap with inconsistent NaN/overflow handling | `two_stage.py:1454-1784` | #156 | Medium |
+| ImputationDiD weight construction duplicated between aggregation and bootstrap (drift risk) -- has explicit code comment acknowledging duplication | `imputation.py:1777-1786`, `imputation.py:2216-2221` | #141 | Medium |
+| ImputationDiD dense `(A0'A0).toarray()` scales O((U+T+K)^2), OOM risk on large panels | `imputation.py:1564` | #141 | Medium |
+
+#### Performance
+
+| Issue | Location | PR | Priority |
+|-------|----------|----|----------|
+| TwoStageDiD per-column `.toarray()` in loop for cluster scores | `two_stage.py:1766-1767` | #156 | Medium |
+| ImputationDiD event-study SEs recompute full conservative variance per horizon (should cache A0/A1 factorization) | `imputation.py:1772-1804` | #141 | Low |
+| Legacy `compute_placebo_effects` uses deprecated projected-gradient weights (marked deprecated, users directed to `SyntheticDiD`) | `utils.py:1689-1691` | #145 | Low |
+| Rust faer SVD ndarray-to-faer conversion overhead (minimal vs SVD cost) | `rust/src/linalg.rs:67` | #115 | Low |
+
+#### Testing/Docs
+
+| Issue | Location | PR | Priority |
+|-------|----------|----|----------|
+| Tutorial notebooks not executed in CI | `docs/tutorials/*.ipynb` | #159 | Low |
+| TwoStageDiD `test_nan_propagation` is a no-op (only `pass`) | `tests/test_two_stage.py:643-652` | #156 | Low |
+| ImputationDiD bootstrap + covariate path untested | `tests/test_imputation.py` | #141 | Low |
+| TROP `n_bootstrap >= 2` validation missing (can yield 0/NaN SE silently) | `trop.py:462` | #124 | Low |
+| SunAbraham deprecated `min_pre_periods`/`min_post_periods` still in `fit()` docstring | `sun_abraham.py:458-487` | #153 | Low |
+| R comparison tests spawn separate `Rscript` per test (slow CI) | `tests/test_methodology_twfe.py:294` | #139 | Low |
+| Rust TROP bootstrap SE returns 0.0 instead of NaN for <2 samples | `rust/src/trop.rs:1038-1054` | #115 | Low |
 
 ---
 
@@ -187,7 +217,7 @@ Replace `@` operator with `np.dot()` at affected call sites. `np.dot()` bypasses
 - `linalg.py`: 332, 690, 704, 829, 1463
 - `staggered.py`: 78, 85, 102, 860, 1024-1025
 - `triple_diff.py`: 301, 307, 323
-- `utils.py`: 481
+- `utils.py`: 515
 - `imputation.py`: 1253, 1301, 1602, 1662
 - `trop.py`: 1098
 
