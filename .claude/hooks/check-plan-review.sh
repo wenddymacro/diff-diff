@@ -15,8 +15,14 @@
 #
 # Known limitations:
 #   - The ls -t fallback (step 3) can pick the wrong plan if multiple files exist.
-#   - A stale sentinel from a prior session can allow a new plan through unreviewed.
-#     The CLAUDE.md guidance mitigates both by updating the sentinel on new plan creation.
+#   - A stale sentinel can approve an unreviewed newer plan. This occurs only when:
+#     (a) the sentinel points to an older plan with a valid review, AND
+#     (b) a newer plan was created without updating the sentinel.
+#     CLAUDE.md instructs sentinel updates on new plan creation (line 647), making (b)
+#     unlikely in practice. A runtime guard was tested and removed (cb8d5e3) because it
+#     caused false denials in multi-plan workflows. Automated tests in
+#     test-check-plan-review.sh verify existing behavior; full mitigation would require
+#     tool-level integration (not hook-level).
 #   - The -nt comparison has 1-second granularity on macOS. A plan edited and
 #     reviewed within the same second could produce a false "fresh" result. In
 #     practice, reviews always take longer.
