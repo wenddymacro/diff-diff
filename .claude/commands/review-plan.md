@@ -424,6 +424,11 @@ The `--pr` URL must be the same across the initial review and the `--updated` re
 
 After displaying the review in the conversation (Step 5), persist it to a file alongside the plan.
 
+0. **Ensure the plans directory exists**:
+   ```bash
+   mkdir -p ~/.claude/plans
+   ```
+
 1. **Derive the review file path**: Extract the plan file's basename, replace the trailing `.md` with `.review.md`, and place it in `~/.claude/plans/`. For example, `~/.claude/plans/foo.md` → `~/.claude/plans/foo.review.md`. If the plan is at `/repo/.claude/plans/bar.md`, the review still goes to `~/.claude/plans/bar.review.md`.
 
 2. **Get the current timestamp**:
@@ -459,7 +464,13 @@ After displaying the review in the conversation (Step 5), persist it to a file a
    ```
    This sentinel is read by the ExitPlanMode hook to identify which plan was most recently reviewed.
 
-6. **Handle write failure gracefully**: If either write fails (permissions, directory doesn't exist, etc.), emit a warning in the conversation but do NOT fail the review. The conversation output is the primary artifact.
+6. **Abort on write failure**: If the review file write fails, report a hard error and stop. Do NOT proceed with the "Tip: In the planning window..." footer. The review file is required by the ExitPlanMode hook — a missing file will permanently block plan approval.
+   ```
+   Error: Failed to write review file to <review-file-path>.
+   Ensure ~/.claude/plans/ exists and is writable, then retry.
+   The review content was displayed above — copy it if needed.
+   ```
+   If the sentinel write fails, emit a warning (the sentinel is a convenience, not a hard requirement — the hook falls back to `ls -t`).
 
 7. **Append a footer** to the conversation output:
    ```

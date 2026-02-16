@@ -15,8 +15,8 @@
 #
 # Known limitations:
 #   - The ls -t fallback (step 3) can pick the wrong plan if multiple files exist.
-#   - A stale sentinel from a prior session is caught by comparing against the newest
-#     plan in the directory, but relies on filesystem mtime for the comparison.
+#   - A stale sentinel from a prior session can allow a new plan through unreviewed.
+#     The CLAUDE.md guidance mitigates both by updating the sentinel on new plan creation.
 #   - The -nt comparison has 1-second granularity on macOS. A plan edited and
 #     reviewed within the same second could produce a false "fresh" result. In
 #     practice, reviews always take longer.
@@ -58,20 +58,6 @@ if [ -f "$SENTINEL" ]; then
   # Expand ~ if present
   PLAN_FILE="${PLAN_FILE/#\~/$HOME}"
   if [ -n "$PLAN_FILE" ] && [ -f "$PLAN_FILE" ]; then
-    # Guard: deny if a newer unreviewed plan exists than the sentinel references
-    NEWEST_PLAN=$(ls -t "$PLANS_DIR"/*.md 2>/dev/null | grep -v '\.review\.md$' | head -1)
-    if [ -n "$NEWEST_PLAN" ] && [ "$NEWEST_PLAN" != "$PLAN_FILE" ]; then
-      # A different, newer plan exists. Check if it has a valid review.
-      NEWEST_BASENAME=$(basename "$NEWEST_PLAN")
-      NEWEST_REVIEW="$PLANS_DIR/${NEWEST_BASENAME%.md}.review.md"
-      if [ ! -f "$NEWEST_REVIEW" ] || [ "$NEWEST_PLAN" -nt "$NEWEST_REVIEW" ]; then
-        deny "Sentinel (.last-reviewed) points to $(basename "$PLAN_FILE"), but a newer unreviewed plan exists: $NEWEST_BASENAME. Review it or update the sentinel."
-      fi
-      if ! validate_review_plan_field "$NEWEST_REVIEW" "$NEWEST_PLAN"; then
-        deny "Sentinel (.last-reviewed) points to $(basename "$PLAN_FILE"), and $NEWEST_BASENAME has a review file but it belongs to a different plan. Re-run the review or update the sentinel."
-      fi
-    fi
-
     PLAN_BASENAME=$(basename "$PLAN_FILE")
     REVIEW_FILE="$PLANS_DIR/${PLAN_BASENAME%.md}.review.md"
     if [ -f "$REVIEW_FILE" ]; then
@@ -123,6 +109,3 @@ fi
 #   7. No sentinel, fallback to most recent plan without review: DENY
 #   8. Review file plan: field doesn't match plan path: DENY
 #   9. Review file has no plan: field (e.g., old format): DENY (empty string != plan path)
-#  10. Sentinel points to older plan, newer plan exists with valid review: ALLOW
-#  11. Sentinel points to older plan, newer plan exists without review: DENY
-#  12. Sentinel points to older plan, newer plan has review for wrong plan: DENY

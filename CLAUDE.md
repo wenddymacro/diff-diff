@@ -654,7 +654,7 @@ Before calling `ExitPlanMode`, offer the user an independent plan review. Use `A
 - "Run review agent for independent feedback" (Recommended)
 - "Present plan for approval as-is"
 
-If "present as-is" is chosen, write a minimal review marker to `~/.claude/plans/<plan-basename>.review.md`:
+If "present as-is" is chosen, ensure `~/.claude/plans` exists (`mkdir -p`), then write a minimal review marker to `~/.claude/plans/<plan-basename>.review.md`:
 ```yaml
 ---
 plan: <plan-file-path>
@@ -679,7 +679,7 @@ If review is requested:
 
 2. **Display the review agent's output** in the conversation. The output includes the plan content (via Step 4b of review-plan.md) followed by the structured review. The user reads both here in the terminal — this is the primary reading surface.
 
-3. **Save to file**: Write the review to `~/.claude/plans/<plan-basename>.review.md`, with YAML frontmatter (plan path, timestamp, verdict, issue counts). Also write the plan path to `~/.claude/plans/.last-reviewed`. If write fails, warn but continue — the terminal display is what matters.
+3. **Save to file**: Ensure `~/.claude/plans` exists (`mkdir -p`) before writing. Write the review to `~/.claude/plans/<plan-basename>.review.md`, with YAML frontmatter (plan path, timestamp, verdict, issue counts). Also write the plan path to `~/.claude/plans/.last-reviewed`. If the review file write fails, report an error and stop — the hook requires this file. If the sentinel write fails, warn but continue (the hook falls back to `ls -t`).
 
 4. **Collect feedback**: Use `AskUserQuestion`:
    - "Address all issues and re-review" (Recommended)

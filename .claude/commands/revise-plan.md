@@ -80,6 +80,7 @@ If "Skip review" is chosen:
 - In Step 7, since there are no review issues to address:
   - Skip rule-based revision (no CRITICAL/MEDIUM/LOW to process)
   - Apply user notes as general guidance for the revision
+  - Ensure the plans directory exists: `mkdir -p ~/.claude/plans`
   - Write a minimal "Skipped" review marker to `~/.claude/plans/<plan-basename>.review.md` (the centralized review path from Change 3) before calling `ExitPlanMode` to satisfy the hook:
     ```yaml
     ---
@@ -96,6 +97,7 @@ If "Skip review" is chosen:
   - Write the plan path to `~/.claude/plans/.last-reviewed` (same as the review-present path in Step 2)
   - In `## Revision Notes`, record: "Review skipped — revision based on user notes only"
   - All issue counts are zero in the Addressed/Dismissed/Open sections
+  - If the review marker write fails, report an error and stop — the hook requires this file on disk.
 
 ### Step 3: Display Plan and Review in Terminal
 
