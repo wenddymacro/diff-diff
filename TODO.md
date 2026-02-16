@@ -127,16 +127,36 @@ Enhancements for `honest_did.py`:
 
 ## RuntimeWarnings in Linear Algebra Operations
 
-Pre-existing RuntimeWarnings in matrix operations that should be investigated:
+### Apple Silicon M4 BLAS Bug (numpy < 2.3)
 
-- [ ] `linalg.py:162` - "divide by zero", "overflow", "invalid value" in fitted value computation
-  - Occurs during `X @ coefficients` when coefficients contain extreme values
-  - Seen in test_prep.py during treatment effect recovery tests
-- [ ] `triple_diff.py:307,323` - Similar warnings in propensity score computation
+Spurious RuntimeWarnings ("divide by zero", "overflow", "invalid value") are emitted by `np.matmul`/`@` on Apple Silicon M4 + macOS Sequoia with numpy < 2.3. The warnings appear for matrices with ≥260 rows but **do not affect result correctness** — coefficients and fitted values are valid (no NaN/Inf), and the design matrices are full rank.
+
+**Root cause**: Apple's BLAS SME (Scalable Matrix Extension) kernels corrupt the floating-point status register, causing spurious FPE signals. Tracked in [numpy#28687](https://github.com/numpy/numpy/issues/28687) and [numpy#29820](https://github.com/numpy/numpy/issues/29820). Fixed in numpy ≥ 2.3 via [PR #29223](https://github.com/numpy/numpy/pull/29223).
+
+**Not reproducible** on M3, Intel, or Linux.
+
+- [ ] `linalg.py:162` - Warnings in fitted value computation (`X @ coefficients`)
+  - Caused by M4 BLAS bug, not extreme coefficient values
+  - Seen in test_prep.py during treatment effect recovery tests (n > 260)
+- [ ] `triple_diff.py:307,323` - Warnings in propensity score computation
   - Occurs in IPW and DR estimation methods with covariates
-  - Related to logistic regression overflow in edge cases
+  - Related to logistic regression overflow in edge cases (separate from BLAS bug)
 
-**Note**: These warnings do not affect correctness of results but should be handled gracefully (e.g., with `np.errstate` context managers or input validation).
+### Fix Plan (follow-up PR)
+
+Replace `@` operator with `np.dot()` at affected call sites. `np.dot()` bypasses the ufunc FPE dispatch layer and produces identical results with zero spurious warnings on M4.
+
+**Affected files and lines:**
+- `linalg.py`: 332, 690, 704, 829, 1463
+- `staggered.py`: 78, 85, 102, 860, 1024-1025
+- `triple_diff.py`: 301, 307, 323
+- `utils.py`: 481
+- `imputation.py`: 1253, 1301, 1602, 1662
+- `trop.py`: 1098
+
+**Regression test:** Assert no RuntimeWarnings from `solve_ols()` with n ≥ 500 on all platforms.
+
+**Long-term:** Revert to `@` operator when numpy ≥ 2.3 becomes the minimum supported version.
 
 ---
 
