@@ -470,6 +470,22 @@ class SunAbraham:
         ValueError
             If required columns are missing or data validation fails.
         """
+        # Deprecation warnings for unimplemented parameters
+        if min_pre_periods != 1:
+            warnings.warn(
+                "min_pre_periods is not yet implemented and will be ignored. "
+                "This parameter will be removed in a future version.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        if min_post_periods != 1:
+            warnings.warn(
+                "min_post_periods is not yet implemented and will be ignored. "
+                "This parameter will be removed in a future version.",
+                FutureWarning,
+                stacklevel=2,
+            )
+
         # Validate inputs
         required_cols = [outcome, unit, time, first_treat]
         if covariates:
@@ -533,9 +549,9 @@ class SunAbraham:
 
         all_rel_times_sorted = sorted(all_rel_times)
 
-        # Filter to reasonable range
-        min_rel = max(min(all_rel_times_sorted), -20)  # cap at -20
-        max_rel = min(max(all_rel_times_sorted), 20)   # cap at +20
+        # Use full range of relative times (no artificial truncation, matches R's fixest::sunab())
+        min_rel = min(all_rel_times_sorted)
+        max_rel = max(all_rel_times_sorted)
 
         # Reference period: last pre-treatment period (typically -1)
         self._reference_period = -1 - self.anticipation
@@ -765,12 +781,18 @@ class SunAbraham:
 
         # Fit OLS using LinearRegression helper (more stable than manual X'X inverse)
         cluster_ids = df_demeaned[cluster_var].values
+
+        # Degrees of freedom adjustment for absorbed unit and time fixed effects
+        n_units_fe = df[unit].nunique()
+        n_times_fe = df[time].nunique()
+        df_adj = n_units_fe + n_times_fe - 2
+
         reg = LinearRegression(
             include_intercept=False,  # Already demeaned, no intercept needed
             robust=True,
             cluster_ids=cluster_ids,
             rank_deficient_action=self.rank_deficient_action,
-        ).fit(X, y)
+        ).fit(X, y, df_adjustment=df_adj)
 
         coefficients = reg.coefficients_
         vcov = reg.vcov_
@@ -915,7 +937,7 @@ class SunAbraham:
         ]
 
         if not post_effects:
-            return 0.0, 0.0
+            return np.nan, np.nan
 
         # Weight by number of treated observations at each relative time
         post_weights = []
@@ -948,7 +970,13 @@ class SunAbraham:
                         overall_weights_by_coef[key] += period_weight * cw
 
         if not overall_weights_by_coef:
-            # Fallback to simple variance calculation
+            # Fallback to simplified variance that ignores covariances between periods
+            warnings.warn(
+                "Could not construct full weight vector for overall ATT SE. "
+                "Using simplified variance that ignores covariances between periods.",
+                UserWarning,
+                stacklevel=2,
+            )
             overall_var = float(
                 np.sum((post_weights ** 2) * np.array([eff["se"] ** 2 for _, eff in post_effects]))
             )

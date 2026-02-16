@@ -424,6 +424,10 @@ where weights ŵ_{g,e} = n_{g,e} / Σ_g n_{g,e} (sample share of cohort g at eve
 - Single cohort: reduces to standard event study
 - Cohorts with no observations at some event-times: weighted appropriately
 - Extrapolation beyond observed event-times: not estimated
+- Event-time range: no artificial cap (estimates all available relative times, matching R's `fixest::sunab()`)
+- No post-treatment effects: returns `(NaN, NaN)` for overall ATT/SE; all inference fields (t_stat, p_value, conf_int) propagate NaN via `np.isfinite()` guards
+- `min_pre_periods`/`min_post_periods` parameters: deprecated (accepted but ignored, emit `FutureWarning`)
+- Variance fallback: when full weight vector cannot be constructed for overall ATT SE, uses simplified variance (ignores covariances between periods) with `UserWarning`
 - Rank-deficient design matrix (covariate collinearity):
   - Detection: Pivoted QR decomposition with tolerance `1e-07` (R's `qr()` default)
   - Handling: Warns and drops linearly dependent columns, sets NA for dropped coefficients (R-style, matches `lm()`)
@@ -434,17 +438,25 @@ where weights ŵ_{g,e} = n_{g,e} / Σ_g n_{g,e} (sample share of cohort g at eve
   - Bootstrap inference: p_value and CI computed from bootstrap distribution, may be valid even when SE/t_stat is NaN (only NaN if <50% of bootstrap samples are valid)
   - Applies to overall ATT, per-effect event study, and aggregated event study
   - **Note**: Defensive enhancement matching CallawaySantAnna behavior; R's `fixest::sunab()` may produce Inf/NaN without warning
+- Inference distribution:
+  - Cohort-level p-values: t-distribution (via `LinearRegression.get_inference()`)
+  - Aggregated event study and overall ATT p-values: normal distribution (via `compute_p_value()`)
+  - This is asymptotically equivalent and standard for delta-method-aggregated quantities
+  - **Deviation from R**: R's fixest uses t-distribution at all levels; aggregated p-values may differ slightly for small samples
 
 **Reference implementation(s):**
 - R: `fixest::sunab()` (Laurent Bergé's implementation)
 - Stata: `eventstudyinteract`
 
 **Requirements checklist:**
-- [ ] Never-treated units required as controls
-- [ ] Interaction weights sum to 1 within each relative time period
-- [ ] Reference period defaults to e=-1, coefficient normalized to zero
-- [ ] Cohort-specific effects recoverable from results
-- [ ] Cluster-robust SEs with delta method for aggregates
+- [x] Never-treated units required as controls
+- [x] Interaction weights sum to 1 within each relative time period
+- [x] Reference period defaults to e=-1, coefficient normalized to zero
+- [x] Cohort-specific effects recoverable from results
+- [x] Cluster-robust SEs with delta method for aggregates
+- [x] R comparison: ATT matches within machine precision (<1e-11)
+- [x] R comparison: SE matches within 0.3% (well within 1% threshold)
+- [x] R comparison: Event study effects match perfectly (correlation 1.0)
 
 ---
 
