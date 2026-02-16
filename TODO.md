@@ -55,6 +55,43 @@ Several estimators return `0.0` for t-statistic when SE is 0 or undefined. This 
 
 **Note**: CallawaySantAnna was fixed in PR #97 to use `np.nan`. These other estimators should follow the same pattern.
 
+### Migrate Existing Inference Call Sites to `safe_inference()`
+
+`safe_inference()` was added to `diff_diff/utils.py` to compute t_stat, p_value, and CI together with a NaN gate at the top. It is now the prescribed pattern for all new code (see CLAUDE.md design pattern #7). However, ~20 existing inline inference computations across 12 files have **not** been migrated yet.
+
+**Files with inline inference to migrate:**
+
+| File | Approx. Locations |
+|------|-------------------|
+| `estimators.py` | 1 |
+| `sun_abraham.py` | 4 |
+| `staggered.py` | 4 |
+| `staggered_aggregation.py` | 2 |
+| `triple_diff.py` | 1 |
+| `imputation.py` | 2 |
+| `diagnostics.py` | 2 |
+| `synthetic_did.py` | 1 |
+| `trop.py` | 2 |
+
+**How to find them:**
+```bash
+grep -n "t_stat[[:space:]]*=[[:space:]]*[^#]*/ *se" diff_diff/*.py | grep -v "safe_inference"
+```
+
+**Migration pattern:**
+```python
+# Before (inline, error-prone)
+t_stat = effect / se if se > 0 else 0.0
+p_value = compute_p_value(t_stat)
+ci = compute_confidence_interval(effect, se, alpha)
+
+# After (NaN-safe, consistent)
+from diff_diff.utils import safe_inference
+t_stat, p_value, ci = safe_inference(effect, se, alpha=alpha, df=df)
+```
+
+**Priority**: Medium — the NaN-handling table above covers the worst cases (those using `0.0`). The remaining sites may use partial guards but should still be migrated for consistency and to prevent regressions.
+
 ---
 
 ### Standard Error Consistency

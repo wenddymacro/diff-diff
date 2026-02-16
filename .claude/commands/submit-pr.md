@@ -126,14 +126,36 @@ Determine if this is a fork-based workflow:
    - Use the current branch name
    - No need to create a new branch
 
-### 6. Stage and Commit Changes
+### 5b. Stage and Quick Pattern Check
 
-1. **Stage all changes first**:
+1. **Stage all changes**:
    ```bash
    git add -A
    ```
 
-2. **Secret scanning check** (AFTER staging to catch all files):
+2. **Quick pattern check** (if methodology files are staged):
+   ```bash
+   git diff --cached --name-only | grep "^diff_diff/.*\.py$" | grep -v "__init__"
+   ```
+
+   If methodology files are present, run Checks A and B from `/pre-merge-check` Section 2.1 on those files:
+   - **Check A**: `grep -n "t_stat[[:space:]]*=[[:space:]]*[^#]*/ *se" <methodology-files> | grep -v "safe_inference"`
+   - **Check B**: `grep -En "if.*(se|SE).*>.*0.*else[[:space:]]+(0\.0|0)" <methodology-files>`
+
+   If warnings are found:
+   ```
+   Pre-commit pattern check found N potential issues:
+   <list warnings with file:line>
+
+   Options:
+   1. Fix issues before committing (recommended)
+   2. Continue anyway
+   ```
+   Use AskUserQuestion. If user chooses to fix, abort the commit flow and let them address the issues.
+
+### 6. Commit Changes
+
+1. **Secret scanning check** (files already staged from 5b):
    - **Run deterministic pattern check** (file names only, no content leaked):
      ```bash
      secret_files=$(git diff --cached -G "(AKIA[A-Z0-9]{16}|ghp_[a-zA-Z0-9]{36}|sk-[a-zA-Z0-9]{48}|gho_[a-zA-Z0-9]{36}|[Aa][Pp][Ii][_-]?[Kk][Ee][Yy][[:space:]]*[=:]|[Ss][Ee][Cc][Rr][Ee][Tt][_-]?[Kk][Ee][Yy][[:space:]]*[=:]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd][[:space:]]*[=:]|[Pp][Rr][Ii][Vv][Aa][Tt][Ee][_-]?[Kk][Ee][Yy]|[Bb][Ee][Aa][Rr][Ee][Rr][[:space:]]+[a-zA-Z0-9_-]+|[Tt][Oo][Kk][Ee][Nn][[:space:]]*[=:])" --name-only 2>/dev/null || true)

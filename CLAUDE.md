@@ -277,6 +277,9 @@ cross-platform compilation - no OpenBLAS or Intel MKL installation required.
    ```
    When adding params to `DifferenceInDifferences.get_params()`, subclasses inherit automatically.
    Standalone estimators must be updated individually.
+7. **Inference computation**: ALL inference fields (t_stat, p_value, conf_int)
+   MUST be computed together using `safe_inference()` from `diff_diff.utils`.
+   Never compute t_stat, p_value, or conf_int individually in new estimator code.
 
 ### Performance Architecture (v1.4.0)
 
@@ -415,6 +418,9 @@ Session-scoped `ci_params` fixture in `conftest.py` scales bootstrap iterations 
 - Assert warning message was emitted
 - Assert the warned-about behavior occurred
 
+**For NaN inference tests**: Use `assert_nan_inference()` from conftest.py to validate
+ALL inference fields are NaN-consistent. Don't check individual fields separately.
+
 ### Dependencies
 
 Core dependencies are numpy, pandas, and scipy only (no statsmodels). The library implements its own OLS, robust standard errors, and inference.
@@ -491,7 +497,12 @@ When adding a new `__init__` parameter that should be available across estimator
    - [ ] Test parameter affects estimator behavior
    - [ ] Test with non-default value
 
-4. **Documentation**:
+4. **Downstream tracing**:
+   - [ ] Before implementing: `grep -rn "self\.<param>" diff_diff/<module>.py` to find ALL downstream paths
+   - [ ] Parameter handled in ALL aggregation methods (simple, event_study, group)
+   - [ ] Parameter handled in bootstrap inference paths
+
+5. **Documentation**:
    - [ ] Update docstring in all affected classes
    - [ ] Update CLAUDE.md if it's a key design pattern
 
@@ -519,6 +530,7 @@ When implementing or modifying code that affects statistical methodology (estima
    - [ ] Assert warnings are raised (not just captured)
    - [ ] Assert the warned-about behavior actually occurred
    - [ ] For NaN results: assert `np.isnan()`, don't just check "no exception"
+   - [ ] All inference fields computed via `safe_inference()` (not inline)
 
 ### Adding Warning/Error/Fallback Handling
 

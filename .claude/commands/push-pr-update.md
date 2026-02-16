@@ -121,13 +121,33 @@ When the working tree is clean but commits are ahead, scan for secrets in the co
    git add -A
    ```
 
-2. **Capture file count for reporting**:
+2. **Quick pattern check** (if methodology files are staged):
+   ```bash
+   git diff --cached --name-only | grep "^diff_diff/.*\.py$" | grep -v "__init__"
+   ```
+
+   If methodology files are present, run Checks A and B from `/pre-merge-check` Section 2.1 on those files:
+   - **Check A**: `grep -n "t_stat[[:space:]]*=[[:space:]]*[^#]*/ *se" <methodology-files> | grep -v "safe_inference"`
+   - **Check B**: `grep -En "if.*(se|SE).*>.*0.*else[[:space:]]+(0\.0|0)" <methodology-files>`
+
+   If warnings are found:
+   ```
+   Pre-commit pattern check found N potential issues:
+   <list warnings with file:line>
+
+   Options:
+   1. Fix issues before committing (recommended)
+   2. Continue anyway
+   ```
+   Use AskUserQuestion. If user chooses to fix, abort the commit flow.
+
+3. **Capture file count for reporting**:
    ```bash
    git diff --cached --name-only | wc -l
    ```
    Store as `<files-changed-count>` for use in final report.
 
-3. **Secret scanning check** (same as submit-pr):
+4. **Secret scanning check** (same as submit-pr):
    - **Run deterministic pattern check** (file names only, no content leaked):
      ```bash
      secret_files=$(git diff --cached -G "(AKIA[A-Z0-9]{16}|ghp_[a-zA-Z0-9]{36}|sk-[a-zA-Z0-9]{48}|gho_[a-zA-Z0-9]{36}|[Aa][Pp][Ii][_-]?[Kk][Ee][Yy][[:space:]]*[=:]|[Ss][Ee][Cc][Rr][Ee][Tt][_-]?[Kk][Ee][Yy][[:space:]]*[=:]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd][[:space:]]*[=:]|[Pp][Rr][Ii][Vv][Aa][Tt][Ee][_-]?[Kk][Ee][Yy]|[Bb][Ee][Aa][Rr][Ee][Rr][[:space:]]+[a-zA-Z0-9_-]+|[Tt][Oo][Kk][Ee][Nn][[:space:]]*[=:])" --name-only 2>/dev/null || true)
@@ -154,7 +174,7 @@ When the working tree is clean but commits are ahead, scan for secrets in the co
      ```
    - If user chooses to continue, re-stage with `git add -A`
 
-4. **Generate or use commit message**:
+5. **Generate or use commit message**:
    - If `--message` provided, use that message
    - Otherwise, generate from changes:
      - Run `git diff --cached --stat` to see what's being committed

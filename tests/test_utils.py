@@ -29,6 +29,7 @@ from diff_diff.utils import (
     compute_synthetic_weights,
     compute_time_weights,
     equivalence_test_trends,
+    safe_inference,
     validate_binary,
 )
 
@@ -516,6 +517,108 @@ class TestComputePValue:
         p_neg = compute_p_value(-t_stat)
 
         assert abs(p_pos - p_neg) < 1e-10
+
+
+# =============================================================================
+# Tests for safe_inference
+# =============================================================================
+
+
+class TestSafeInference:
+    """Tests for safe_inference function."""
+
+    def test_nan_se_returns_all_nan(self):
+        """Test that NaN SE produces all NaN inference fields."""
+        t_stat, p_value, (ci_lower, ci_upper) = safe_inference(5.0, np.nan)
+        assert np.isnan(t_stat)
+        assert np.isnan(p_value)
+        assert np.isnan(ci_lower)
+        assert np.isnan(ci_upper)
+
+    def test_zero_se_returns_all_nan(self):
+        """Test that zero SE produces all NaN inference fields."""
+        t_stat, p_value, (ci_lower, ci_upper) = safe_inference(5.0, 0.0)
+        assert np.isnan(t_stat)
+        assert np.isnan(p_value)
+        assert np.isnan(ci_lower)
+        assert np.isnan(ci_upper)
+
+    def test_negative_se_returns_all_nan(self):
+        """Test that negative SE produces all NaN inference fields."""
+        t_stat, p_value, (ci_lower, ci_upper) = safe_inference(5.0, -1.0)
+        assert np.isnan(t_stat)
+        assert np.isnan(p_value)
+        assert np.isnan(ci_lower)
+        assert np.isnan(ci_upper)
+
+    def test_inf_se_returns_all_nan(self):
+        """Test that infinite SE produces all NaN inference fields."""
+        t_stat, p_value, (ci_lower, ci_upper) = safe_inference(5.0, np.inf)
+        assert np.isnan(t_stat)
+        assert np.isnan(p_value)
+        assert np.isnan(ci_lower)
+        assert np.isnan(ci_upper)
+
+    def test_neg_inf_se_returns_all_nan(self):
+        """Test that negative infinite SE produces all NaN inference fields."""
+        t_stat, p_value, (ci_lower, ci_upper) = safe_inference(5.0, -np.inf)
+        assert np.isnan(t_stat)
+        assert np.isnan(p_value)
+        assert np.isnan(ci_lower)
+        assert np.isnan(ci_upper)
+
+    def test_valid_se_normal_distribution(self):
+        """Test valid SE with normal distribution (df=None)."""
+        effect = 5.0
+        se = 2.0
+        t_stat, p_value, (ci_lower, ci_upper) = safe_inference(effect, se)
+
+        assert t_stat == pytest.approx(2.5)
+        assert 0 < p_value < 1
+        assert ci_lower < effect < ci_upper
+
+    def test_valid_se_t_distribution(self):
+        """Test valid SE with t-distribution (df=30)."""
+        effect = 3.0
+        se = 1.5
+        t_stat, p_value, (ci_lower, ci_upper) = safe_inference(effect, se, df=30)
+
+        assert t_stat == pytest.approx(2.0)
+        assert 0 < p_value < 1
+        assert ci_lower < effect < ci_upper
+        # t-distribution CI should be wider than normal for same alpha
+        _, _, (ci_lower_norm, ci_upper_norm) = safe_inference(effect, se, df=None)
+        assert (ci_upper - ci_lower) > (ci_upper_norm - ci_lower_norm)
+
+    def test_return_type(self):
+        """Test that return type is (float, float, (float, float))."""
+        t_stat, p_value, conf_int = safe_inference(5.0, 1.0)
+
+        assert isinstance(t_stat, float)
+        assert isinstance(p_value, float)
+        assert isinstance(conf_int, tuple)
+        assert len(conf_int) == 2
+        assert isinstance(conf_int[0], float)
+        assert isinstance(conf_int[1], float)
+
+    def test_custom_alpha(self):
+        """Test that alpha parameter affects CI width."""
+        effect = 5.0
+        se = 1.0
+        _, _, (lower_95, upper_95) = safe_inference(effect, se, alpha=0.05)
+        _, _, (lower_90, upper_90) = safe_inference(effect, se, alpha=0.10)
+
+        width_95 = upper_95 - lower_95
+        width_90 = upper_90 - lower_90
+        assert width_95 > width_90
+
+    def test_zero_effect(self):
+        """Test with zero effect and valid SE."""
+        t_stat, p_value, (ci_lower, ci_upper) = safe_inference(0.0, 1.0)
+
+        assert t_stat == pytest.approx(0.0)
+        assert p_value == pytest.approx(1.0)
+        assert ci_lower < 0 < ci_upper
 
 
 # =============================================================================

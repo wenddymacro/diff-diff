@@ -129,3 +129,47 @@ class CIParams:
 def ci_params():
     """Backend-aware parameter scaling for CI performance."""
     return CIParams()
+
+
+# =============================================================================
+# NaN Inference Assertion Helper
+# =============================================================================
+
+import numpy as np
+
+
+def assert_nan_inference(inference_dict):
+    """Assert ALL inference fields are NaN-consistent when SE is non-finite or <= 0.
+
+    Use this helper to validate that when SE is undefined, ALL downstream
+    inference fields are NaN (not zero, not some valid-looking number).
+
+    Parameters
+    ----------
+    inference_dict : dict
+        Dictionary with keys: ``se``, ``t_stat``, ``p_value``, ``conf_int``
+        where ``conf_int`` is a 2-tuple ``(ci_lower, ci_upper)``.
+
+    Raises
+    ------
+    AssertionError
+        If any inference field is not NaN when it should be.
+    """
+    se = inference_dict["se"]
+    assert not (np.isfinite(se) and se > 0), (
+        f"assert_nan_inference called but SE={se} is finite and positive. "
+        "This helper is for validating NaN propagation when SE is invalid."
+    )
+    assert np.isnan(inference_dict["t_stat"]), (
+        f"t_stat should be NaN when SE={se}, got {inference_dict['t_stat']}"
+    )
+    assert np.isnan(inference_dict["p_value"]), (
+        f"p_value should be NaN when SE={se}, got {inference_dict['p_value']}"
+    )
+    ci = inference_dict["conf_int"]
+    assert np.isnan(ci[0]), (
+        f"ci_lower should be NaN when SE={se}, got {ci[0]}"
+    )
+    assert np.isnan(ci[1]), (
+        f"ci_upper should be NaN when SE={se}, got {ci[1]}"
+    )
