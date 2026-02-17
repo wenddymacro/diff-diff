@@ -106,19 +106,18 @@ class TwoStageDiDBootstrapMixin:
         unique_clusters, cluster_indices = np.unique(cluster_ids, return_inverse=True)
         G = len(unique_clusters)
 
-        weighted_X10_csc = weighted_X10.tocsc()
+        # Convert sparse to dense once (see _compute_gmm_variance for memory note)
+        weighted_X10_dense = weighted_X10.toarray()
         c_by_cluster = np.zeros((G, p))
         for j_col in range(p):
-            col_data = weighted_X10_csc.getcol(j_col).toarray().ravel()
-            np.add.at(c_by_cluster[:, j_col], cluster_indices, col_data)
+            np.add.at(c_by_cluster[:, j_col], cluster_indices, weighted_X10_dense[:, j_col])
 
         weighted_X2 = X_2 * eps_2[:, None]
         s2_by_cluster = np.zeros((G, k))
         for j_col in range(k):
             np.add.at(s2_by_cluster[:, j_col], cluster_indices, weighted_X2[:, j_col])
 
-        correction = np.dot(c_by_cluster, gamma_hat)
-        S = correction - s2_by_cluster
+        S = self._compute_gmm_scores(c_by_cluster, gamma_hat, s2_by_cluster)
 
         # Bread
         XtX_2 = np.dot(X_2.T, X_2)
@@ -201,7 +200,7 @@ class TwoStageDiDBootstrapMixin:
 
         n_clusters = len(unique_clusters)
         all_weights = _generate_bootstrap_weights_batch(
-            self.n_bootstrap, n_clusters, "rademacher", rng
+            self.n_bootstrap, n_clusters, self.bootstrap_weights, rng
         )
 
         # T_b = bread @ (sum_g w_bg * S_g) = bread @ (W @ S)'  per boot
@@ -385,7 +384,7 @@ class TwoStageDiDBootstrapMixin:
 
         return TwoStageBootstrapResults(
             n_bootstrap=self.n_bootstrap,
-            weight_type="rademacher",
+            weight_type=self.bootstrap_weights,
             alpha=self.alpha,
             overall_att_se=overall_se,
             overall_att_ci=overall_ci,

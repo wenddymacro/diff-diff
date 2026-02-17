@@ -156,6 +156,12 @@ class TROP:
         self.lambda_unit_grid = lambda_unit_grid or [0.0, 0.1, 0.5, 1.0, 2.0, 5.0]
         self.lambda_nn_grid = lambda_nn_grid or [0.0, 0.01, 0.1, 1.0, 10.0]
 
+        if n_bootstrap < 2:
+            raise ValueError(
+                "n_bootstrap must be >= 2 for TROP (bootstrap variance "
+                "estimation is always used)"
+            )
+
         self.max_iter = max_iter
         self.tol = tol
         self.alpha = alpha

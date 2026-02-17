@@ -95,6 +95,13 @@ def simple_panel_data():
 class TestTROP:
     """Tests for TROP estimator."""
 
+    def test_n_bootstrap_less_than_2_raises(self):
+        """n_bootstrap < 2 should raise ValueError."""
+        with pytest.raises(ValueError, match="n_bootstrap must be >= 2"):
+            TROP(n_bootstrap=1)
+        with pytest.raises(ValueError, match="n_bootstrap must be >= 2"):
+            TROP(n_bootstrap=0)
+
     def test_basic_fit(self, simple_panel_data):
         """Test basic model fitting."""
         trop_est = TROP(

@@ -907,6 +907,19 @@ class TestTwoStageDiDParameters:
         assert params["horizon_max"] == 5
         assert params["rank_deficient_action"] == "warn"
         assert params["cluster"] is None
+        assert params["bootstrap_weights"] == "rademacher"
+
+    def test_bootstrap_weights_in_get_set_params(self):
+        """bootstrap_weights should appear in get_params and be settable."""
+        est = TwoStageDiD(bootstrap_weights="mammen")
+        assert est.get_params()["bootstrap_weights"] == "mammen"
+        est.set_params(bootstrap_weights="webb")
+        assert est.bootstrap_weights == "webb"
+
+    def test_bootstrap_weights_invalid_raises(self):
+        """Invalid bootstrap_weights value should raise ValueError."""
+        with pytest.raises(ValueError, match="bootstrap_weights"):
+            TwoStageDiD(bootstrap_weights="invalid")
 
     def test_set_params(self):
         """set_params should modify attributes."""
@@ -1046,6 +1059,22 @@ class TestTwoStageDiDBootstrap:
         assert results.bootstrap_results.event_study_ses is not None
         for h, se in results.bootstrap_results.event_study_ses.items():
             assert se > 0
+
+    def test_bootstrap_weights_mammen(self, ci_params):
+        """Bootstrap with mammen weights should produce valid results."""
+        data = generate_test_data()
+        n_boot = ci_params.bootstrap(50)
+        results = TwoStageDiD(
+            n_bootstrap=n_boot, bootstrap_weights="mammen", seed=42
+        ).fit(
+            data, outcome="outcome", unit="unit", time="time", first_treat="first_treat"
+        )
+
+        br = results.bootstrap_results
+        assert br is not None
+        assert br.weight_type == "mammen"
+        assert br.overall_att_se > 0
+        assert np.isfinite(br.overall_att_p_value)
 
 
 # =============================================================================

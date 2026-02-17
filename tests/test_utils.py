@@ -23,7 +23,6 @@ from diff_diff.utils import (
     check_parallel_trends_robust,
     compute_confidence_interval,
     compute_p_value,
-    compute_placebo_effects,
     compute_robust_se,
     compute_sdid_estimator,
     compute_synthetic_weights,
@@ -1044,116 +1043,6 @@ class TestEquivalenceTestTrends:
 
         # Wide margin should have smaller TOST p-value (easier to show equivalence)
         assert results_wide["tost_p_value"] <= results_tight["tost_p_value"]
-
-
-# =============================================================================
-# Tests for compute_placebo_effects
-# =============================================================================
-
-
-class TestComputePlaceboEffects:
-    """Tests for compute_placebo_effects function."""
-
-    def test_returns_correct_number_of_effects(self, sdid_panel_data):
-        """Test that function returns correct number of placebo effects."""
-        # Prepare data matrices
-        control_data = sdid_panel_data[sdid_panel_data["treated"] == 0]
-        treated_data = sdid_panel_data[sdid_panel_data["treated"] == 1]
-
-        control_pivot = control_data.pivot(index="period", columns="unit", values="outcome")
-        treated_mean = treated_data.groupby("period")["outcome"].mean()
-
-        pre_periods = [0, 1, 2, 3, 4]
-        post_periods = [5, 6, 7]
-
-        Y_pre_control = control_pivot.loc[pre_periods].values
-        Y_post_control = control_pivot.loc[post_periods].values
-        Y_pre_treated = treated_mean.loc[pre_periods].values
-
-        # Compute weights
-        unit_weights = compute_synthetic_weights(Y_pre_control, Y_pre_treated)
-        time_weights = compute_time_weights(Y_pre_control, Y_post_control, zeta_lambda=1e-6)
-
-        control_units = list(control_pivot.columns)
-
-        with pytest.warns(DeprecationWarning, match="compute_placebo_effects uses legacy"):
-            placebo_effects = compute_placebo_effects(
-                Y_pre_control,
-                Y_post_control,
-                Y_pre_treated,
-                unit_weights,
-                time_weights,
-                control_units
-            )
-
-        # Should have one placebo effect per control unit
-        assert len(placebo_effects) == len(control_units)
-
-    def test_placebo_effects_distribution(self, sdid_panel_data):
-        """Test that placebo effects form a reasonable distribution."""
-        control_data = sdid_panel_data[sdid_panel_data["treated"] == 0]
-        treated_data = sdid_panel_data[sdid_panel_data["treated"] == 1]
-
-        control_pivot = control_data.pivot(index="period", columns="unit", values="outcome")
-        treated_mean = treated_data.groupby("period")["outcome"].mean()
-
-        pre_periods = [0, 1, 2, 3, 4]
-        post_periods = [5, 6, 7]
-
-        Y_pre_control = control_pivot.loc[pre_periods].values
-        Y_post_control = control_pivot.loc[post_periods].values
-        Y_pre_treated = treated_mean.loc[pre_periods].values
-
-        unit_weights = compute_synthetic_weights(Y_pre_control, Y_pre_treated)
-        time_weights = compute_time_weights(Y_pre_control, Y_post_control, zeta_lambda=1e-6)
-
-        control_units = list(control_pivot.columns)
-
-        with pytest.warns(DeprecationWarning, match="compute_placebo_effects uses legacy"):
-            placebo_effects = compute_placebo_effects(
-                Y_pre_control,
-                Y_post_control,
-                Y_pre_treated,
-                unit_weights,
-                time_weights,
-                control_units
-            )
-
-        # Placebo effects should be centered around zero (no treatment)
-        assert np.abs(np.mean(placebo_effects)) < 2.0  # Allow some deviation
-
-    def test_n_placebo_limits_output(self, sdid_panel_data):
-        """Test that n_placebo parameter limits output size."""
-        control_data = sdid_panel_data[sdid_panel_data["treated"] == 0]
-        treated_data = sdid_panel_data[sdid_panel_data["treated"] == 1]
-
-        control_pivot = control_data.pivot(index="period", columns="unit", values="outcome")
-        treated_mean = treated_data.groupby("period")["outcome"].mean()
-
-        pre_periods = [0, 1, 2, 3, 4]
-        post_periods = [5, 6, 7]
-
-        Y_pre_control = control_pivot.loc[pre_periods].values
-        Y_post_control = control_pivot.loc[post_periods].values
-        Y_pre_treated = treated_mean.loc[pre_periods].values
-
-        unit_weights = compute_synthetic_weights(Y_pre_control, Y_pre_treated)
-        time_weights = compute_time_weights(Y_pre_control, Y_post_control, zeta_lambda=1e-6)
-
-        control_units = list(control_pivot.columns)
-
-        with pytest.warns(DeprecationWarning, match="compute_placebo_effects uses legacy"):
-            placebo_effects = compute_placebo_effects(
-                Y_pre_control,
-                Y_post_control,
-                Y_pre_treated,
-                unit_weights,
-                time_weights,
-                control_units,
-                n_placebo=5
-            )
-
-        assert len(placebo_effects) == 5
 
 
 # =============================================================================

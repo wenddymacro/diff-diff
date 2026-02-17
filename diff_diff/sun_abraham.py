@@ -433,8 +433,6 @@ class SunAbraham:
         time: str,
         first_treat: str,
         covariates: Optional[List[str]] = None,
-        min_pre_periods: int = 1,
-        min_post_periods: int = 1,
     ) -> SunAbrahamResults:
         """
         Fit the Sun-Abraham estimator using saturated regression.
@@ -454,10 +452,6 @@ class SunAbraham:
             Use 0 (or np.inf) for never-treated units.
         covariates : list, optional
             List of covariate column names to include in regression.
-        min_pre_periods : int, default=1
-            **Deprecated**: Accepted but ignored. Will be removed in a future version.
-        min_post_periods : int, default=1
-            **Deprecated**: Accepted but ignored. Will be removed in a future version.
 
         Returns
         -------
@@ -469,22 +463,6 @@ class SunAbraham:
         ValueError
             If required columns are missing or data validation fails.
         """
-        # Deprecation warnings for unimplemented parameters
-        if min_pre_periods != 1:
-            warnings.warn(
-                "min_pre_periods is not yet implemented and will be ignored. "
-                "This parameter will be removed in a future version.",
-                FutureWarning,
-                stacklevel=2,
-            )
-        if min_post_periods != 1:
-            warnings.warn(
-                "min_post_periods is not yet implemented and will be ignored. "
-                "This parameter will be removed in a future version.",
-                FutureWarning,
-                stacklevel=2,
-            )
-
         # Validate inputs
         required_cols = [outcome, unit, time, first_treat]
         if covariates:
