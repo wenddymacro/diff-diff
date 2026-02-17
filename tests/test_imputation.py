@@ -1104,6 +1104,21 @@ class TestImputationBootstrap:
         assert br.overall_att_se > 0
         assert np.isfinite(br.overall_att_p_value)
 
+    def test_bootstrap_weights_webb(self, ci_params):
+        """Bootstrap with webb weights should produce valid results."""
+        data = generate_test_data()
+        n_boot = ci_params.bootstrap(50)
+        est = ImputationDiD(n_bootstrap=n_boot, bootstrap_weights="webb", seed=42)
+        results = est.fit(
+            data, outcome="outcome", unit="unit", time="time", first_treat="first_treat",
+        )
+
+        br = results.bootstrap_results
+        assert br is not None
+        assert br.weight_type == "webb"
+        assert br.overall_att_se > 0
+        assert np.isfinite(br.overall_att_p_value)
+
     def test_bootstrap_with_covariates(self, ci_params):
         """Bootstrap should work with covariates."""
         data = generate_test_data()
