@@ -1092,6 +1092,44 @@ class TestTwoStageDiDBootstrap:
         assert br.overall_att_se > 0
         assert np.isfinite(br.overall_att_p_value)
 
+    def test_bootstrap_weights_event_study(self, ci_params):
+        """Bootstrap with non-default weights should work for event study aggregation."""
+        data = generate_test_data()
+        n_boot = ci_params.bootstrap(50)
+        results = TwoStageDiD(
+            n_bootstrap=n_boot, bootstrap_weights="mammen", seed=42
+        ).fit(
+            data, outcome="outcome", unit="unit", time="time",
+            first_treat="first_treat", aggregate="event_study",
+        )
+
+        br = results.bootstrap_results
+        assert br is not None
+        assert br.weight_type == "mammen"
+        assert br.event_study_ses is not None
+        assert len(br.event_study_ses) > 0
+        for h, se in br.event_study_ses.items():
+            assert se > 0, f"Non-positive SE at horizon {h}"
+
+    def test_bootstrap_weights_group(self, ci_params):
+        """Bootstrap with non-default weights should work for group aggregation."""
+        data = generate_test_data()
+        n_boot = ci_params.bootstrap(50)
+        results = TwoStageDiD(
+            n_bootstrap=n_boot, bootstrap_weights="mammen", seed=42
+        ).fit(
+            data, outcome="outcome", unit="unit", time="time",
+            first_treat="first_treat", aggregate="group",
+        )
+
+        br = results.bootstrap_results
+        assert br is not None
+        assert br.weight_type == "mammen"
+        assert br.group_ses is not None
+        assert len(br.group_ses) > 0
+        for g, se in br.group_ses.items():
+            assert se > 0, f"Non-positive SE for group {g}"
+
 
 # =============================================================================
 # TestTwoStageDiDConvenience

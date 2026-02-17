@@ -124,7 +124,8 @@ class ImputationDiDBootstrapMixin:
 
         For each aggregation target (overall, per-horizon, per-group), computes
         psi_i = sum_t v_it * epsilon_tilde_it for each cluster. The multiplier
-        bootstrap then perturbs these psi sums with Rademacher weights.
+        bootstrap then perturbs these psi sums with multiplier weights
+        (rademacher/mammen/webb; configurable via ``bootstrap_weights``).
 
         Computational cost scales with the number of aggregation targets, since
         each target requires its own v_untreated computation (weight-dependent).
@@ -218,7 +219,8 @@ class ImputationDiDBootstrapMixin:
         """
         Run multiplier bootstrap on pre-computed influence function sums.
 
-        Uses T_b = sum_i w_b_i * psi_i where w_b_i are Rademacher weights
+        Uses T_b = sum_i w_b_i * psi_i where w_b_i are multiplier weights
+        (rademacher/mammen/webb; configurable via ``bootstrap_weights``)
         and psi_i are cluster-level influence function sums from Theorem 3.
         SE = std(T_b, ddof=1).
         """
