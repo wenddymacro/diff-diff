@@ -1178,28 +1178,6 @@ class TestSunAbrahamMethodology:
             f"Expected (NaN, NaN) overall_conf_int, got {results.overall_conf_int}"
         )
 
-    def test_deprecated_min_pre_periods_warning(self):
-        """Test that min_pre_periods emits FutureWarning (Step 5c)."""
-        data = generate_staggered_data(seed=42)
-
-        sa = SunAbraham(n_bootstrap=0)
-        with pytest.warns(FutureWarning, match="min_pre_periods"):
-            sa.fit(
-                data, outcome="outcome", unit="unit", time="time",
-                first_treat="first_treat", min_pre_periods=2,
-            )
-
-    def test_deprecated_min_post_periods_warning(self):
-        """Test that min_post_periods emits FutureWarning (Step 5c)."""
-        data = generate_staggered_data(seed=42)
-
-        sa = SunAbraham(n_bootstrap=0)
-        with pytest.warns(FutureWarning, match="min_post_periods"):
-            sa.fit(
-                data, outcome="outcome", unit="unit", time="time",
-                first_treat="first_treat", min_post_periods=2,
-            )
-
     def test_event_time_no_truncation(self):
         """Test that event times beyond ±20 are estimated (Step 5d).
 
@@ -1463,6 +1441,15 @@ class TestSunAbrahamMethodology:
         assert np.isclose(results_inf.overall_se, results_zero.overall_se), (
             f"SE differs: inf={results_inf.overall_se}, zero={results_zero.overall_se}"
         )
+
+    def test_removed_params_raise_typeerror(self):
+        """Removed min_pre_periods/min_post_periods raise TypeError."""
+        data = generate_staggered_data(n_units=30, n_periods=6, seed=42)
+        sa = SunAbraham(n_bootstrap=0)
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            sa.fit(data, "outcome", "unit", "time", "first_treat", min_pre_periods=2)
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            sa.fit(data, "outcome", "unit", "time", "first_treat", min_post_periods=2)
 
     def test_all_never_treated_inf_raises(self):
         """Test that all-never-treated data with np.inf encoding raises ValueError."""

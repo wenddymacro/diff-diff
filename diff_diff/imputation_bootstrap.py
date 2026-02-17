@@ -19,6 +19,39 @@ __all__ = [
 ]
 
 
+def _compute_target_weights(
+    tau_hat: np.ndarray,
+    target_mask: np.ndarray,
+) -> "tuple[np.ndarray, int]":
+    """
+    Equal weights for finite tau_hat observations within target_mask.
+
+    Used by both aggregation and bootstrap paths to avoid weight logic
+    duplication.
+
+    Parameters
+    ----------
+    tau_hat : np.ndarray
+        Per-observation treatment effects (may contain NaN).
+    target_mask : np.ndarray
+        Boolean mask selecting the target subset within tau_hat.
+
+    Returns
+    -------
+    weights : np.ndarray
+        Weight array (same length as tau_hat). 1/n_valid for finite
+        observations in target_mask, 0 elsewhere.
+    n_valid : int
+        Number of finite observations in the target subset.
+    """
+    finite_target = np.isfinite(tau_hat) & target_mask
+    n_valid = int(finite_target.sum())
+    weights = np.zeros(len(tau_hat))
+    if n_valid > 0:
+        weights[np.where(finite_target)[0]] = 1.0 / n_valid
+    return weights, n_valid
+
+
 class ImputationDiDBootstrapMixin:
     """Mixin providing bootstrap inference methods for ImputationDiD."""
 
@@ -91,7 +124,8 @@ class ImputationDiDBootstrapMixin:
 
         For each aggregation target (overall, per-horizon, per-group), computes
         psi_i = sum_t v_it * epsilon_tilde_it for each cluster. The multiplier
-        bootstrap then perturbs these psi sums with Rademacher weights.
+        bootstrap then perturbs these psi sums with multiplier weights
+        (rademacher/mammen/webb; configurable via ``bootstrap_weights``).
 
         Computational cost scales with the number of aggregation targets, since
         each target requires its own v_untreated computation (weight-dependent).
@@ -120,13 +154,10 @@ class ImputationDiDBootstrapMixin:
         result["overall"] = (overall_psi, cluster_ids)
 
         # Event study: per-horizon weights
-        # NOTE: weight logic duplicated from _aggregate_event_study.
-        # If weight scheme changes there, update here too.
         if event_study_effects:
             result["event_study"] = {}
             df_1 = df.loc[omega_1_mask]
             rel_times = df_1["_rel_time"].values
-            n_omega_1 = int(omega_1_mask.sum())
 
             # Balanced cohort mask (same logic as _aggregate_event_study)
             balanced_mask = None
@@ -150,24 +181,18 @@ class ImputationDiDBootstrapMixin:
                 h_mask = rel_times == h
                 if balanced_mask is not None:
                     h_mask = h_mask & balanced_mask
-                weights_h = np.zeros(n_omega_1)
-                finite_h = np.isfinite(tau_hat) & h_mask
-                n_valid_h = int(finite_h.sum())
+                weights_h, n_valid_h = _compute_target_weights(tau_hat, h_mask)
                 if n_valid_h == 0:
                     continue
-                weights_h[np.where(finite_h)[0]] = 1.0 / n_valid_h
 
                 psi_h, _ = self._compute_cluster_psi_sums(**common, weights=weights_h)
                 result["event_study"][h] = psi_h
 
         # Group effects: per-group weights
-        # NOTE: weight logic duplicated from _aggregate_group.
-        # If weight scheme changes there, update here too.
         if group_effects:
             result["group"] = {}
             df_1 = df.loc[omega_1_mask]
             cohorts = df_1[first_treat].values
-            n_omega_1 = int(omega_1_mask.sum())
 
             for g in group_effects:
                 if group_effects[g].get("n_obs", 0) == 0:
@@ -175,12 +200,9 @@ class ImputationDiDBootstrapMixin:
                 if not np.isfinite(group_effects[g].get("effect", np.nan)):
                     continue
                 g_mask = cohorts == g
-                weights_g = np.zeros(n_omega_1)
-                finite_g = np.isfinite(tau_hat) & g_mask
-                n_valid_g = int(finite_g.sum())
+                weights_g, n_valid_g = _compute_target_weights(tau_hat, g_mask)
                 if n_valid_g == 0:
                     continue
-                weights_g[np.where(finite_g)[0]] = 1.0 / n_valid_g
 
                 psi_g, _ = self._compute_cluster_psi_sums(**common, weights=weights_g)
                 result["group"][g] = psi_g
@@ -197,7 +219,8 @@ class ImputationDiDBootstrapMixin:
         """
         Run multiplier bootstrap on pre-computed influence function sums.
 
-        Uses T_b = sum_i w_b_i * psi_i where w_b_i are Rademacher weights
+        Uses T_b = sum_i w_b_i * psi_i where w_b_i are multiplier weights
+        (rademacher/mammen/webb; configurable via ``bootstrap_weights``)
         and psi_i are cluster-level influence function sums from Theorem 3.
         SE = std(T_b, ddof=1).
         """
@@ -216,7 +239,7 @@ class ImputationDiDBootstrapMixin:
 
         # Generate ALL weights upfront: shape (n_bootstrap, n_clusters)
         all_weights = _generate_bootstrap_weights_batch(
-            self.n_bootstrap, n_clusters, "rademacher", rng
+            self.n_bootstrap, n_clusters, self.bootstrap_weights, rng
         )
 
         # Overall ATT bootstrap draws
@@ -295,7 +318,7 @@ class ImputationDiDBootstrapMixin:
 
         return ImputationBootstrapResults(
             n_bootstrap=self.n_bootstrap,
-            weight_type="rademacher",
+            weight_type=self.bootstrap_weights,
             alpha=self.alpha,
             overall_att_se=overall_se,
             overall_att_ci=overall_ci,

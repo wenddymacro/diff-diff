@@ -425,6 +425,19 @@ class TestImputationDiD:
         assert params["aux_partition"] == "cohort"
         assert params["cluster"] is None
         assert params["rank_deficient_action"] == "warn"
+        assert params["bootstrap_weights"] == "rademacher"
+
+    def test_bootstrap_weights_in_get_set_params(self):
+        """bootstrap_weights should appear in get_params and be settable."""
+        est = ImputationDiD(bootstrap_weights="mammen")
+        assert est.get_params()["bootstrap_weights"] == "mammen"
+        est.set_params(bootstrap_weights="webb")
+        assert est.bootstrap_weights == "webb"
+
+    def test_bootstrap_weights_invalid_raises(self):
+        """Invalid bootstrap_weights value should raise ValueError."""
+        with pytest.raises(ValueError, match="bootstrap_weights"):
+            ImputationDiD(bootstrap_weights="invalid")
 
     def test_set_params(self):
         """Test set_params modifies attributes."""
@@ -1075,6 +1088,97 @@ class TestImputationBootstrap:
         expected_upper = float(np.percentile(dist, 97.5))
         np.testing.assert_allclose(br.overall_att_ci[0], expected_lower, rtol=1e-10)
         np.testing.assert_allclose(br.overall_att_ci[1], expected_upper, rtol=1e-10)
+
+    def test_bootstrap_weights_mammen(self, ci_params):
+        """Bootstrap with mammen weights should produce valid results."""
+        data = generate_test_data()
+        n_boot = ci_params.bootstrap(50)
+        est = ImputationDiD(n_bootstrap=n_boot, bootstrap_weights="mammen", seed=42)
+        results = est.fit(
+            data, outcome="outcome", unit="unit", time="time", first_treat="first_treat",
+        )
+
+        br = results.bootstrap_results
+        assert br is not None
+        assert br.weight_type == "mammen"
+        assert br.overall_att_se > 0
+        assert np.isfinite(br.overall_att_p_value)
+
+    def test_bootstrap_weights_webb(self, ci_params):
+        """Bootstrap with webb weights should produce valid results."""
+        data = generate_test_data()
+        n_boot = ci_params.bootstrap(50)
+        est = ImputationDiD(n_bootstrap=n_boot, bootstrap_weights="webb", seed=42)
+        results = est.fit(
+            data, outcome="outcome", unit="unit", time="time", first_treat="first_treat",
+        )
+
+        br = results.bootstrap_results
+        assert br is not None
+        assert br.weight_type == "webb"
+        assert br.overall_att_se > 0
+        assert np.isfinite(br.overall_att_p_value)
+
+    def test_bootstrap_weights_event_study(self, ci_params):
+        """Bootstrap with non-default weights should work for event study aggregation."""
+        data = generate_test_data()
+        n_boot = ci_params.bootstrap(50)
+        est = ImputationDiD(
+            n_bootstrap=n_boot, bootstrap_weights="mammen", seed=42
+        )
+        results = est.fit(
+            data, outcome="outcome", unit="unit", time="time",
+            first_treat="first_treat", aggregate="event_study",
+        )
+
+        br = results.bootstrap_results
+        assert br is not None
+        assert br.weight_type == "mammen"
+        assert br.event_study_ses is not None
+        assert len(br.event_study_ses) > 0
+        for h, se in br.event_study_ses.items():
+            assert se > 0, f"Non-positive SE at horizon {h}"
+
+    def test_bootstrap_weights_group(self, ci_params):
+        """Bootstrap with non-default weights should work for group aggregation."""
+        data = generate_test_data()
+        n_boot = ci_params.bootstrap(50)
+        est = ImputationDiD(
+            n_bootstrap=n_boot, bootstrap_weights="mammen", seed=42
+        )
+        results = est.fit(
+            data, outcome="outcome", unit="unit", time="time",
+            first_treat="first_treat", aggregate="group",
+        )
+
+        br = results.bootstrap_results
+        assert br is not None
+        assert br.weight_type == "mammen"
+        assert br.group_ses is not None
+        assert len(br.group_ses) > 0
+        for g, se in br.group_ses.items():
+            assert se > 0, f"Non-positive SE for group {g}"
+
+    def test_bootstrap_with_covariates(self, ci_params):
+        """Bootstrap should work with covariates."""
+        data = generate_test_data()
+        # Add a covariate
+        rng = np.random.default_rng(123)
+        data["x1"] = rng.normal(0, 1, len(data))
+        n_boot = ci_params.bootstrap(50)
+        est = ImputationDiD(n_bootstrap=n_boot, seed=42)
+        results = est.fit(
+            data,
+            outcome="outcome",
+            unit="unit",
+            time="time",
+            first_treat="first_treat",
+            covariates=["x1"],
+        )
+
+        assert results.bootstrap_results is not None
+        assert results.bootstrap_results.overall_att_se > 0
+        assert np.isfinite(results.bootstrap_results.overall_att_p_value)
 
 
 # =============================================================================

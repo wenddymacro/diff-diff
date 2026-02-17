@@ -34,7 +34,7 @@ class TwoStageBootstrapResults:
     n_bootstrap : int
         Number of bootstrap iterations.
     weight_type : str
-        Type of bootstrap weights (currently "rademacher" only).
+        Type of bootstrap weights: "rademacher", "mammen", or "webb".
     alpha : float
         Significance level used for confidence intervals.
     overall_att_se : float

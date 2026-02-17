@@ -907,6 +907,19 @@ class TestTwoStageDiDParameters:
         assert params["horizon_max"] == 5
         assert params["rank_deficient_action"] == "warn"
         assert params["cluster"] is None
+        assert params["bootstrap_weights"] == "rademacher"
+
+    def test_bootstrap_weights_in_get_set_params(self):
+        """bootstrap_weights should appear in get_params and be settable."""
+        est = TwoStageDiD(bootstrap_weights="mammen")
+        assert est.get_params()["bootstrap_weights"] == "mammen"
+        est.set_params(bootstrap_weights="webb")
+        assert est.bootstrap_weights == "webb"
+
+    def test_bootstrap_weights_invalid_raises(self):
+        """Invalid bootstrap_weights value should raise ValueError."""
+        with pytest.raises(ValueError, match="bootstrap_weights"):
+            TwoStageDiD(bootstrap_weights="invalid")
 
     def test_set_params(self):
         """set_params should modify attributes."""
@@ -1047,6 +1060,76 @@ class TestTwoStageDiDBootstrap:
         for h, se in results.bootstrap_results.event_study_ses.items():
             assert se > 0
 
+    def test_bootstrap_weights_mammen(self, ci_params):
+        """Bootstrap with mammen weights should produce valid results."""
+        data = generate_test_data()
+        n_boot = ci_params.bootstrap(50)
+        results = TwoStageDiD(
+            n_bootstrap=n_boot, bootstrap_weights="mammen", seed=42
+        ).fit(
+            data, outcome="outcome", unit="unit", time="time", first_treat="first_treat"
+        )
+
+        br = results.bootstrap_results
+        assert br is not None
+        assert br.weight_type == "mammen"
+        assert br.overall_att_se > 0
+        assert np.isfinite(br.overall_att_p_value)
+
+    def test_bootstrap_weights_webb(self, ci_params):
+        """Bootstrap with webb weights should produce valid results."""
+        data = generate_test_data()
+        n_boot = ci_params.bootstrap(50)
+        results = TwoStageDiD(
+            n_bootstrap=n_boot, bootstrap_weights="webb", seed=42
+        ).fit(
+            data, outcome="outcome", unit="unit", time="time", first_treat="first_treat"
+        )
+
+        br = results.bootstrap_results
+        assert br is not None
+        assert br.weight_type == "webb"
+        assert br.overall_att_se > 0
+        assert np.isfinite(br.overall_att_p_value)
+
+    def test_bootstrap_weights_event_study(self, ci_params):
+        """Bootstrap with non-default weights should work for event study aggregation."""
+        data = generate_test_data()
+        n_boot = ci_params.bootstrap(50)
+        results = TwoStageDiD(
+            n_bootstrap=n_boot, bootstrap_weights="mammen", seed=42
+        ).fit(
+            data, outcome="outcome", unit="unit", time="time",
+            first_treat="first_treat", aggregate="event_study",
+        )
+
+        br = results.bootstrap_results
+        assert br is not None
+        assert br.weight_type == "mammen"
+        assert br.event_study_ses is not None
+        assert len(br.event_study_ses) > 0
+        for h, se in br.event_study_ses.items():
+            assert se > 0, f"Non-positive SE at horizon {h}"
+
+    def test_bootstrap_weights_group(self, ci_params):
+        """Bootstrap with non-default weights should work for group aggregation."""
+        data = generate_test_data()
+        n_boot = ci_params.bootstrap(50)
+        results = TwoStageDiD(
+            n_bootstrap=n_boot, bootstrap_weights="mammen", seed=42
+        ).fit(
+            data, outcome="outcome", unit="unit", time="time",
+            first_treat="first_treat", aggregate="group",
+        )
+
+        br = results.bootstrap_results
+        assert br is not None
+        assert br.weight_type == "mammen"
+        assert br.group_ses is not None
+        assert len(br.group_ses) > 0
+        for g, se in br.group_ses.items():
+            assert se > 0, f"Non-positive SE for group {g}"
+
 
 # =============================================================================
 # TestTwoStageDiDConvenience
@@ -1116,3 +1199,35 @@ class TestTwoStageDiDConvenience:
         results.print_summary()
         captured = capsys.readouterr()
         assert "Two-Stage DiD" in captured.out
+
+    def test_sparse_fallback_path(self):
+        """Size guard falls back to per-column path and produces same results."""
+        import diff_diff.two_stage as ts_mod
+
+        data = generate_test_data(n_units=50, n_periods=6, seed=42)
+
+        # Run with normal (high) threshold — uses dense path
+        result_dense = TwoStageDiD().fit(
+            data, outcome="outcome", unit="unit", time="time", first_treat="first_treat"
+        )
+
+        # Patch threshold to 1 to force per-column path on all data
+        orig = ts_mod._SPARSE_DENSE_THRESHOLD
+        try:
+            ts_mod._SPARSE_DENSE_THRESHOLD = 1
+            result_sparse = TwoStageDiD().fit(
+                data,
+                outcome="outcome",
+                unit="unit",
+                time="time",
+                first_treat="first_treat",
+            )
+        finally:
+            ts_mod._SPARSE_DENSE_THRESHOLD = orig
+
+        np.testing.assert_allclose(
+            result_dense.overall_att, result_sparse.overall_att, rtol=1e-10
+        )
+        np.testing.assert_allclose(
+            result_dense.overall_se, result_sparse.overall_se, rtol=1e-10
+        )

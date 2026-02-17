@@ -29,6 +29,11 @@ import pandas as pd
 from scipy import sparse
 from scipy.sparse.linalg import factorized as sparse_factorized
 
+# Maximum number of elements before falling back to per-column sparse aggregation.
+# 10M float64 elements ≈ 80 MB peak allocation. Above this, per-column .getcol()
+# trades throughput for bounded memory. Keep in sync with two_stage_bootstrap.py.
+_SPARSE_DENSE_THRESHOLD = 10_000_000
+
 from diff_diff.linalg import solve_ols
 from diff_diff.two_stage_bootstrap import TwoStageDiDBootstrapMixin
 from diff_diff.two_stage_results import TwoStageBootstrapResults, TwoStageDiDResults  # noqa: F401 (re-export)
@@ -67,6 +72,8 @@ class TwoStageDiD(TwoStageDiDBootstrapMixin):
     n_bootstrap : int, default=0
         Number of bootstrap iterations. If 0, uses analytical GMM
         sandwich inference.
+    bootstrap_weights : str, default="rademacher"
+        Type of bootstrap weights: "rademacher", "mammen", or "webb".
     seed : int, optional
         Random seed for reproducibility.
     rank_deficient_action : str, default="warn"
@@ -125,6 +132,7 @@ class TwoStageDiD(TwoStageDiDBootstrapMixin):
         alpha: float = 0.05,
         cluster: Optional[str] = None,
         n_bootstrap: int = 0,
+        bootstrap_weights: str = "rademacher",
         seed: Optional[int] = None,
         rank_deficient_action: str = "warn",
         horizon_max: Optional[int] = None,
@@ -134,11 +142,17 @@ class TwoStageDiD(TwoStageDiDBootstrapMixin):
                 f"rank_deficient_action must be 'warn', 'error', or 'silent', "
                 f"got '{rank_deficient_action}'"
             )
+        if bootstrap_weights not in ("rademacher", "mammen", "webb"):
+            raise ValueError(
+                f"bootstrap_weights must be 'rademacher', 'mammen', or 'webb', "
+                f"got '{bootstrap_weights}'"
+            )
 
         self.anticipation = anticipation
         self.alpha = alpha
         self.cluster = cluster
         self.n_bootstrap = n_bootstrap
+        self.bootstrap_weights = bootstrap_weights
         self.seed = seed
         self.rank_deficient_action = rank_deficient_action
         self.horizon_max = horizon_max
@@ -1066,6 +1080,41 @@ class TwoStageDiD(TwoStageDiDBootstrapMixin):
         return group_effects
 
     # =========================================================================
+    # GMM score computation
+    # =========================================================================
+
+    @staticmethod
+    def _compute_gmm_scores(
+        c_by_cluster: np.ndarray,
+        gamma_hat: np.ndarray,
+        s2_by_cluster: np.ndarray,
+    ) -> np.ndarray:
+        """
+        Compute per-cluster GMM scores S_g = gamma_hat' c_g - X'_{2g} eps_{2g}.
+
+        Handles NaN/overflow from rank-deficient FE by wrapping in errstate
+        and replacing non-finite values with 0.
+
+        Parameters
+        ----------
+        c_by_cluster : np.ndarray, shape (G, p)
+            Per-cluster Stage 1 scores.
+        gamma_hat : np.ndarray, shape (p, k)
+            Cross-moment correction matrix.
+        s2_by_cluster : np.ndarray, shape (G, k)
+            Per-cluster Stage 2 scores.
+
+        Returns
+        -------
+        np.ndarray, shape (G, k)
+            Per-cluster influence scores.
+        """
+        with np.errstate(invalid="ignore", divide="ignore", over="ignore"):
+            correction = np.dot(c_by_cluster, gamma_hat)
+        np.nan_to_num(correction, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+        return correction - s2_by_cluster
+
+    # =========================================================================
     # GMM Sandwich Variance (Butts & Gardner 2022)
     # =========================================================================
 
@@ -1178,12 +1227,19 @@ class TwoStageDiD(TwoStageDiDBootstrapMixin):
         unique_clusters, cluster_indices = np.unique(cluster_ids, return_inverse=True)
         G = len(unique_clusters)
 
-        # Aggregate sparse rows by cluster using column-wise np.add.at
-        weighted_X10_csc = weighted_X10.tocsc()
+        n_elements = weighted_X10.shape[0] * weighted_X10.shape[1]
         c_by_cluster = np.zeros((G, p))
-        for j_col in range(p):
-            col_data = weighted_X10_csc.getcol(j_col).toarray().ravel()
-            np.add.at(c_by_cluster[:, j_col], cluster_indices, col_data)
+        if n_elements > _SPARSE_DENSE_THRESHOLD:
+            # Per-column path: limits peak memory for large FE matrices
+            weighted_X10_csc = weighted_X10.tocsc()
+            for j_col in range(p):
+                col_data = weighted_X10_csc.getcol(j_col).toarray().ravel()
+                np.add.at(c_by_cluster[:, j_col], cluster_indices, col_data)
+        else:
+            # Dense path: faster for moderate-size matrices
+            weighted_X10_dense = weighted_X10.toarray()
+            for j_col in range(p):
+                np.add.at(c_by_cluster[:, j_col], cluster_indices, weighted_X10_dense[:, j_col])
 
         # 3. Per-cluster Stage 2 scores: X'_{2g} eps_{2g}
         weighted_X2 = X_2 * eps_2[:, None]  # (n x k) dense
@@ -1192,11 +1248,7 @@ class TwoStageDiD(TwoStageDiDBootstrapMixin):
             np.add.at(s2_by_cluster[:, j_col], cluster_indices, weighted_X2[:, j_col])
 
         # 4. S_g = gamma_hat' c_g - X'_{2g} eps_{2g}
-        with np.errstate(invalid="ignore", divide="ignore", over="ignore"):
-            correction = np.dot(c_by_cluster, gamma_hat)  # (G x p) @ (p x k) = (G x k)
-        # Replace NaN/inf from overflow (rank-deficient FE) with 0
-        np.nan_to_num(correction, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
-        S = correction - s2_by_cluster  # (G x k)
+        S = self._compute_gmm_scores(c_by_cluster, gamma_hat, s2_by_cluster)
 
         # 5. Meat: sum_g S_g S'_g = S' S
         with np.errstate(invalid="ignore", over="ignore"):
@@ -1304,6 +1356,7 @@ class TwoStageDiD(TwoStageDiDBootstrapMixin):
             "alpha": self.alpha,
             "cluster": self.cluster,
             "n_bootstrap": self.n_bootstrap,
+            "bootstrap_weights": self.bootstrap_weights,
             "seed": self.seed,
             "rank_deficient_action": self.rank_deficient_action,
             "horizon_max": self.horizon_max,

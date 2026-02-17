@@ -22,7 +22,7 @@ import pandas as pd
 from scipy import sparse, stats
 from scipy.sparse.linalg import spsolve
 
-from diff_diff.imputation_bootstrap import ImputationDiDBootstrapMixin
+from diff_diff.imputation_bootstrap import ImputationDiDBootstrapMixin, _compute_target_weights
 from diff_diff.imputation_results import ImputationBootstrapResults, ImputationDiDResults  # noqa: F401 (re-export)
 from diff_diff.linalg import solve_ols
 from diff_diff.utils import safe_inference
@@ -63,6 +63,8 @@ class ImputationDiD(ImputationDiDBootstrapMixin):
     n_bootstrap : int, default=0
         Number of bootstrap iterations. If 0, uses analytical inference
         (conservative variance from Theorem 3).
+    bootstrap_weights : str, default="rademacher"
+        Type of bootstrap weights: "rademacher", "mammen", or "webb".
     seed : int, optional
         Random seed for reproducibility.
     rank_deficient_action : str, default="warn"
@@ -126,6 +128,7 @@ class ImputationDiD(ImputationDiDBootstrapMixin):
         alpha: float = 0.05,
         cluster: Optional[str] = None,
         n_bootstrap: int = 0,
+        bootstrap_weights: str = "rademacher",
         seed: Optional[int] = None,
         rank_deficient_action: str = "warn",
         horizon_max: Optional[int] = None,
@@ -135,6 +138,11 @@ class ImputationDiD(ImputationDiDBootstrapMixin):
             raise ValueError(
                 f"rank_deficient_action must be 'warn', 'error', or 'silent', "
                 f"got '{rank_deficient_action}'"
+            )
+        if bootstrap_weights not in ("rademacher", "mammen", "webb"):
+            raise ValueError(
+                f"bootstrap_weights must be 'rademacher', 'mammen', or 'webb', "
+                f"got '{bootstrap_weights}'"
             )
         if aux_partition not in ("cohort_horizon", "cohort", "horizon"):
             raise ValueError(
@@ -146,6 +154,7 @@ class ImputationDiD(ImputationDiDBootstrapMixin):
         self.alpha = alpha
         self.cluster = cluster
         self.n_bootstrap = n_bootstrap
+        self.bootstrap_weights = bootstrap_weights
         self.seed = seed
         self.rank_deficient_action = rank_deficient_action
         self.horizon_max = horizon_max
@@ -1359,15 +1368,7 @@ class ImputationDiD(ImputationDiDBootstrapMixin):
             effect = float(np.mean(valid_tau))
 
             # Compute SE via conservative variance with horizon-specific weights
-            weights_h = np.zeros(int(omega_1_mask.sum()))
-            # Map h_mask (relative to df_1) to weights array
-            h_indices_in_omega1 = np.where(h_mask)[0]
-            n_valid = len(valid_tau)
-            # Only weight valid (finite) observations
-            finite_mask = np.isfinite(tau_hat[h_mask])
-            valid_h_indices = h_indices_in_omega1[finite_mask]
-            for idx in valid_h_indices:
-                weights_h[idx] = 1.0 / n_valid
+            weights_h, n_valid = _compute_target_weights(tau_hat, h_mask)
 
             se = self._compute_conservative_variance(
                 df=df,
@@ -1477,12 +1478,7 @@ class ImputationDiD(ImputationDiDBootstrapMixin):
             effect = float(np.mean(valid_tau))
 
             # Compute SE with group-specific weights
-            weights_g = np.zeros(int(omega_1_mask.sum()))
-            finite_mask = np.isfinite(tau_hat) & g_mask
-            g_indices = np.where(finite_mask)[0]
-            n_valid = len(valid_tau)
-            for idx in g_indices:
-                weights_g[idx] = 1.0 / n_valid
+            weights_g, _ = _compute_target_weights(tau_hat, g_mask)
 
             se = self._compute_conservative_variance(
                 df=df,
@@ -1664,6 +1660,7 @@ class ImputationDiD(ImputationDiDBootstrapMixin):
             "alpha": self.alpha,
             "cluster": self.cluster,
             "n_bootstrap": self.n_bootstrap,
+            "bootstrap_weights": self.bootstrap_weights,
             "seed": self.seed,
             "rank_deficient_action": self.rank_deficient_action,
             "horizon_max": self.horizon_max,

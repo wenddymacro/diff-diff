@@ -15,6 +15,9 @@ from scipy.sparse.linalg import factorized as sparse_factorized
 
 from diff_diff.linalg import solve_ols
 from diff_diff.staggered_bootstrap import _generate_bootstrap_weights_batch
+# Maximum number of elements before falling back to per-column sparse aggregation.
+# Keep in sync with two_stage.py.
+_SPARSE_DENSE_THRESHOLD = 10_000_000
 from diff_diff.two_stage_results import TwoStageBootstrapResults
 
 __all__ = [
@@ -106,19 +109,26 @@ class TwoStageDiDBootstrapMixin:
         unique_clusters, cluster_indices = np.unique(cluster_ids, return_inverse=True)
         G = len(unique_clusters)
 
-        weighted_X10_csc = weighted_X10.tocsc()
+        n_elements = weighted_X10.shape[0] * weighted_X10.shape[1]
         c_by_cluster = np.zeros((G, p))
-        for j_col in range(p):
-            col_data = weighted_X10_csc.getcol(j_col).toarray().ravel()
-            np.add.at(c_by_cluster[:, j_col], cluster_indices, col_data)
+        if n_elements > _SPARSE_DENSE_THRESHOLD:
+            # Per-column path: limits peak memory for large FE matrices
+            weighted_X10_csc = weighted_X10.tocsc()
+            for j_col in range(p):
+                col_data = weighted_X10_csc.getcol(j_col).toarray().ravel()
+                np.add.at(c_by_cluster[:, j_col], cluster_indices, col_data)
+        else:
+            # Dense path: faster for moderate-size matrices
+            weighted_X10_dense = weighted_X10.toarray()
+            for j_col in range(p):
+                np.add.at(c_by_cluster[:, j_col], cluster_indices, weighted_X10_dense[:, j_col])
 
         weighted_X2 = X_2 * eps_2[:, None]
         s2_by_cluster = np.zeros((G, k))
         for j_col in range(k):
             np.add.at(s2_by_cluster[:, j_col], cluster_indices, weighted_X2[:, j_col])
 
-        correction = np.dot(c_by_cluster, gamma_hat)
-        S = correction - s2_by_cluster
+        S = self._compute_gmm_scores(c_by_cluster, gamma_hat, s2_by_cluster)
 
         # Bread
         XtX_2 = np.dot(X_2.T, X_2)
@@ -201,7 +211,7 @@ class TwoStageDiDBootstrapMixin:
 
         n_clusters = len(unique_clusters)
         all_weights = _generate_bootstrap_weights_batch(
-            self.n_bootstrap, n_clusters, "rademacher", rng
+            self.n_bootstrap, n_clusters, self.bootstrap_weights, rng
         )
 
         # T_b = bread @ (sum_g w_bg * S_g) = bread @ (W @ S)'  per boot
@@ -385,7 +395,7 @@ class TwoStageDiDBootstrapMixin:
 
         return TwoStageBootstrapResults(
             n_bootstrap=self.n_bootstrap,
-            weight_type="rademacher",
+            weight_type=self.bootstrap_weights,
             alpha=self.alpha,
             overall_att_se=overall_se,
             overall_att_ci=overall_ci,
