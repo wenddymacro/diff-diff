@@ -3,10 +3,12 @@
 //! This module provides optimized implementations of computationally
 //! intensive operations used in difference-in-differences analysis.
 
-// Pull in BLAS linker flags when platform features are enabled.
+// Pull in BLAS linker flags for macOS Accelerate.
 // blas-src is a linker-only crate — extern crate is required to ensure
-// the Accelerate framework (macOS) or OpenBLAS (Linux) is actually linked.
-#[cfg(any(feature = "accelerate", feature = "openblas"))]
+// the Accelerate framework is actually linked.
+// For OpenBLAS (Linux), linking is handled by build.rs instead of blas-src
+// to avoid the openblas-src -> ureq -> native-tls dependency chain.
+#[cfg(feature = "accelerate")]
 extern crate blas_src;
 
 use pyo3::prelude::*;

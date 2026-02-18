@@ -17,7 +17,7 @@ extension-module = ["pyo3/extension-module"]
 # Platform BLAS backends (optional, activated for pre-built wheels)
 # When enabled, ndarray's .dot() and general_mat_vec_mul dispatch to BLAS dgemv/dgemm
 accelerate = ["ndarray/blas", "dep:blas-src", "blas-src/accelerate"]
-openblas = ["ndarray/blas", "dep:blas-src", "blas-src/openblas"]
+openblas = ["ndarray/blas"]
 
 [dependencies]
 # PyO3 0.22 supports Python 3.8-3.13
