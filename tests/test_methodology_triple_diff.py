@@ -1230,3 +1230,82 @@ class TestParameterFunctionality:
 
         assert result_robust.att == result_not_robust.att
         assert result_robust.se == result_not_robust.se
+
+    def test_cluster_single_cluster_raises(self):
+        """Single cluster raises ValueError."""
+        data = generate_ddd_data(n_per_cell=50, seed=42)
+        data["cluster_id"] = 1  # All same cluster
+
+        ddd = TripleDifference(estimation_method="dr", cluster="cluster_id")
+        with pytest.raises(ValueError, match="at least 2 clusters"):
+            ddd.fit(data, outcome="outcome", group="group",
+                    partition="partition", time="time")
+
+    def test_cluster_nan_ids_raises(self):
+        """NaN cluster IDs raise ValueError."""
+        data = generate_ddd_data(n_per_cell=50, seed=42)
+        data["cluster_id"] = data.index % 20
+        data.loc[0, "cluster_id"] = np.nan
+
+        ddd = TripleDifference(estimation_method="dr", cluster="cluster_id")
+        with pytest.raises(ValueError, match="missing values"):
+            ddd.fit(data, outcome="outcome", group="group",
+                    partition="partition", time="time")
+
+    def test_overlap_warning_on_imbalanced_data(self):
+        """Poor overlap triggers warning for IPW/DR."""
+        rng = np.random.default_rng(42)
+        records = []
+        unit_id = 0
+        # Extreme imbalance: 3 in treated eligible, 500 in others
+        sizes = {(1, 1): 3, (1, 0): 500, (0, 1): 500, (0, 0): 500}
+        for (g, p), n_cell in sizes.items():
+            for t in [0, 1]:
+                for _ in range(n_cell):
+                    y = 10 + 2 * g + p + 0.5 * t + rng.normal(0, 1)
+                    if g == 1 and p == 1 and t == 1:
+                        y += 3.0
+                    records.append({"outcome": y, "group": g, "partition": p,
+                                    "time": t, "unit_id": unit_id,
+                                    "cov1": rng.normal(0, 1)})
+                    unit_id += 1
+        data = pd.DataFrame(records)
+
+        ddd = TripleDifference(estimation_method="ipw")
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = ddd.fit(data, outcome="outcome", group="group",
+                             partition="partition", time="time",
+                             covariates=["cov1"])
+        overlap_warnings = [x for x in w
+                            if "overlap" in str(x.message).lower()
+                            and "trimmed" in str(x.message).lower()]
+        assert len(overlap_warnings) > 0
+        assert np.isfinite(result.att)
+
+    def test_no_overlap_warning_for_reg(self):
+        """RA method does not trigger overlap warnings (no pscores computed)."""
+        rng = np.random.default_rng(42)
+        records = []
+        unit_id = 0
+        sizes = {(1, 1): 3, (1, 0): 500, (0, 1): 500, (0, 0): 500}
+        for (g, p), n_cell in sizes.items():
+            for t in [0, 1]:
+                for _ in range(n_cell):
+                    y = 10 + 2 * g + p + 0.5 * t + rng.normal(0, 1)
+                    if g == 1 and p == 1 and t == 1:
+                        y += 3.0
+                    records.append({"outcome": y, "group": g, "partition": p,
+                                    "time": t, "unit_id": unit_id,
+                                    "cov1": rng.normal(0, 1)})
+                    unit_id += 1
+        data = pd.DataFrame(records)
+
+        ddd = TripleDifference(estimation_method="reg")
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = ddd.fit(data, outcome="outcome", group="group",
+                             partition="partition", time="time",
+                             covariates=["cov1"])
+        overlap_warnings = [x for x in w if "overlap" in str(x.message).lower()]
+        assert len(overlap_warnings) == 0

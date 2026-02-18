@@ -822,6 +822,9 @@ has no additional effect.
 - Propensity scores near 0/1: trimmed at `pscore_trim` (default 0.01)
 - Empty cells: raises ValueError with diagnostic message
 - Low cell counts: warns when any cell has fewer than 10 observations
+- Cluster-robust SE: requires at least 2 clusters (raises `ValueError`)
+- Cluster IDs: must not contain NaN (raises `ValueError`)
+- Overlap warning: emitted when >5% of observations are trimmed at pscore bounds (IPW/DR only)
 - Collinear covariates: detected via pivoted QR in `solve_ols()`, action controlled by
   `rank_deficient_action` ("warn", "error", "silent")
 - NaN inference for undefined statistics:

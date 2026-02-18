@@ -519,6 +519,10 @@ class TripleDifference:
 
         # Store cluster IDs for SE computation
         self._cluster_ids = data[self.cluster].values if self.cluster is not None else None
+        if self._cluster_ids is not None and np.any(pd.isna(data[self.cluster])):
+            raise ValueError(
+                f"Cluster column '{self.cluster}' contains missing values"
+            )
 
         # Get covariates if specified
         X = None
@@ -802,6 +806,7 @@ class TripleDifference:
         did_results = {}
         pscore_stats = None
         all_pscores = {}  # Collect pscores for diagnostics
+        overlap_issues = []  # Collect overlap diagnostics across comparisons
 
         with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
             for j in [3, 2, 1]:
@@ -833,6 +838,16 @@ class TripleDifference:
                                          1 - self.pscore_trim)
                     all_pscores[j] = pscore_sub
 
+                    # Check overlap: count obs at trim bounds
+                    # (1e-10 tolerance for floating-point after np.clip)
+                    n_trimmed = int(np.sum(
+                        (pscore_sub <= self.pscore_trim + 1e-10)
+                        | (pscore_sub >= 1 - self.pscore_trim - 1e-10)
+                    ))
+                    frac_trimmed = n_trimmed / len(pscore_sub)
+                    if frac_trimmed > 0.05:
+                        overlap_issues.append((j, frac_trimmed))
+
                     # Hessian for influence function correction
                     W_ps = pscore_sub * (1 - pscore_sub)
                     try:
@@ -845,6 +860,14 @@ class TripleDifference:
                     pscore_sub = np.full(n_sub, np.mean(PA4))
                     pscore_sub = np.clip(pscore_sub, self.pscore_trim,
                                          1 - self.pscore_trim)
+                    # Check overlap (same logic as covariate branch)
+                    n_trimmed = int(np.sum(
+                        (pscore_sub <= self.pscore_trim + 1e-10)
+                        | (pscore_sub >= 1 - self.pscore_trim - 1e-10)
+                    ))
+                    frac_trimmed = n_trimmed / len(pscore_sub)
+                    if frac_trimmed > 0.05:
+                        overlap_issues.append((j, frac_trimmed))
                     hessian = None
 
                 # --- Outcome regression ---
@@ -881,6 +904,18 @@ class TripleDifference:
 
                 did_results[j] = {"att": att_j, "inf": inf_full}
 
+        # Emit overlap warning if >5% of observations trimmed in any comparison
+        if overlap_issues:
+            details = ", ".join(
+                f"subgroup {j} vs 4: {frac:.0%}" for j, frac in overlap_issues
+            )
+            warnings.warn(
+                f"Poor propensity score overlap ({details} of observations "
+                f"trimmed at bounds). IPW/DR estimates may be unreliable.",
+                UserWarning,
+                stacklevel=3,
+            )
+
         # --- Combine three DiDs ---
         att = did_results[3]["att"] + did_results[2]["att"] - did_results[1]["att"]
 
@@ -900,6 +935,11 @@ class TripleDifference:
             # Cluster-robust SE: sum IF within clusters, then Liang-Zeger variance
             unique_clusters = np.unique(self._cluster_ids)
             n_clusters_val = len(unique_clusters)
+            if n_clusters_val < 2:
+                raise ValueError(
+                    f"Need at least 2 clusters for cluster-robust SEs, "
+                    f"got {n_clusters_val}"
+                )
             cluster_sums = np.array([
                 np.sum(inf_func[self._cluster_ids == c]) for c in unique_clusters
             ])
