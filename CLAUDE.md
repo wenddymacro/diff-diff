@@ -40,6 +40,15 @@ maturin develop
 # Build with release optimizations
 maturin develop --release
 
+# Build with platform BLAS (macOS — links Apple Accelerate)
+maturin develop --release --features accelerate
+
+# Build with platform BLAS (Linux — requires libopenblas-dev)
+maturin develop --release --features openblas
+
+# Build without BLAS (Windows, or explicit pure Rust)
+maturin develop --release
+
 # Force pure Python mode (disable Rust backend)
 DIFF_DIFF_BACKEND=python pytest
 
@@ -50,9 +59,11 @@ DIFF_DIFF_BACKEND=rust pytest
 pytest tests/test_rust_backend.py -v
 ```
 
-**Note**: As of v2.2.0, the Rust backend uses the pure-Rust `faer` library for linear algebra,
-eliminating external BLAS/LAPACK dependencies. This enables Windows wheel builds and simplifies
-cross-platform compilation - no OpenBLAS or Intel MKL installation required.
+**Note**: As of v2.2.0, the Rust backend uses `faer` (pure Rust) for SVD and matrix inversion.
+BLAS is optionally linked via Cargo features (`accelerate` on macOS, `openblas` on Linux)
+for matrix-vector/matrix-matrix products. Windows builds remain fully pure Rust with no
+external dependencies. Pre-built PyPI wheels include platform BLAS; source builds use
+pure Rust by default.
 
 ## Architecture
 
@@ -183,6 +194,7 @@ cross-platform compilation - no OpenBLAS or Intel MKL installation required.
   - Detects optional Rust backend availability
   - Handles `DIFF_DIFF_BACKEND` environment variable ('auto', 'python', 'rust')
   - Exports `HAS_RUST_BACKEND` flag and Rust function references
+  - `rust_backend_info()` — returns compile-time BLAS feature status dict
   - Other modules import from here to avoid circular imports with `__init__.py`
 
 - **`rust/`** - Optional Rust backend for accelerated computation (v2.0.0+):
@@ -194,8 +206,10 @@ cross-platform compilation - no OpenBLAS or Intel MKL installation required.
     - `compute_unit_distance_matrix()` - Parallel pairwise RMSE distance computation (4-8x speedup)
     - `loocv_grid_search()` - Parallel LOOCV across tuning parameters (10-50x speedup)
     - `bootstrap_trop_variance()` - Parallel bootstrap variance estimation (5-15x speedup)
-  - Uses pure-Rust `faer` library for linear algebra (no external BLAS/LAPACK dependencies)
-  - Cross-platform: builds on Linux, macOS, and Windows without additional setup
+  - Uses pure-Rust `faer` library for SVD/matrix inversion (no external deps)
+  - Optional BLAS linking via Cargo features: `accelerate` (macOS), `openblas` (Linux)
+  - When BLAS is enabled, ndarray `.dot()` calls dispatch to platform-optimized dgemv/dgemm
+  - Cross-platform: Windows builds use pure Rust with no additional setup
   - Provides 4-8x speedup for SyntheticDiD, 5-20x speedup for TROP
 
 - **`diff_diff/results.py`** - Dataclass containers for estimation results:

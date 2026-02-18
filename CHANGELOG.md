@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Conditional BLAS linking for Rust backend** — Apple Accelerate on macOS, OpenBLAS on Linux.
+  Pre-built wheels now use platform-optimized BLAS for matrix-vector and matrix-matrix
+  operations across all Rust-accelerated code paths (weights, OLS, TROP). Windows continues
+  using pure Rust (no external dependencies). Improves Rust backend performance at larger scales.
+- `rust_backend_info()` diagnostic function in `diff_diff._backend` — reports compile-time
+  BLAS feature status (blas, accelerate, openblas)
+
+### Fixed
+- **Rust SDID backend performance regression at scale** — Frank-Wolfe solver was 3-10x slower than pure Python at 1k+ scale
+  - Gram-accelerated FW loop for time weights: precomputes A^T@A, reducing per-iteration cost from O(N×T0) to O(T0) (~100x speedup per iteration at 5k scale)
+  - Allocation-free FW loop for unit weights: 1 GEMV per iteration (was 3), zero heap allocations (was ~8)
+  - Dispatch based on problem dimensions: Gram path when T0 < N, standard path when T0 >= N
+  - Rust backend now faster than pure Python at all scales
+
 ## [2.4.1] - 2026-02-17
 
 ### Added
