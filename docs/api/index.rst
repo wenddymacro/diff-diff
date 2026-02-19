@@ -19,6 +19,7 @@ Core estimator classes for DiD analysis:
    diff_diff.CallawaySantAnna
    diff_diff.SunAbraham
    diff_diff.ImputationDiD
+   diff_diff.StackedDiD
    diff_diff.TripleDifference
    diff_diff.TROP
 
@@ -43,6 +44,7 @@ Result containers returned by estimators:
    diff_diff.ImputationDiDResults
    diff_diff.ImputationBootstrapResults
    diff_diff.TripleDifferenceResults
+   diff_diff.StackedDiDResults
    diff_diff.trop.TROPResults
 
 Visualization
@@ -185,6 +187,7 @@ Detailed documentation by module:
    estimators
    staggered
    imputation
+   stacked_did
    triple_diff
    trop
    results
