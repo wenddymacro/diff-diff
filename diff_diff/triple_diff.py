@@ -827,12 +827,21 @@ class TripleDifference:
                     hessian = None
                 elif has_covariates:
                     # Logistic regression: P(subgroup=4 | X) within {j, 4}
+                    ps_estimated = True
                     try:
                         _, pscore_sub = _logistic_regression(
                             covX_sub[:, 1:], PA4
                         )
                     except Exception:
                         pscore_sub = np.full(n_sub, np.mean(PA4))
+                        ps_estimated = False
+                        warnings.warn(
+                            f"Propensity score estimation failed for subgroup "
+                            f"{j} vs 4; using unconditional probability. "
+                            f"SEs may be less efficient.",
+                            UserWarning,
+                            stacklevel=3,
+                        )
 
                     pscore_sub = np.clip(pscore_sub, self.pscore_trim,
                                          1 - self.pscore_trim)
@@ -848,13 +857,16 @@ class TripleDifference:
                     if frac_trimmed > 0.05:
                         overlap_issues.append((j, frac_trimmed))
 
-                    # Hessian for influence function correction
-                    W_ps = pscore_sub * (1 - pscore_sub)
-                    try:
-                        XWX = covX_sub.T @ (W_ps[:, None] * covX_sub)
-                        hessian = np.linalg.inv(XWX) * n_sub
-                    except np.linalg.LinAlgError:
-                        hessian = np.linalg.pinv(XWX) * n_sub
+                    # Hessian only when PS was actually estimated
+                    if ps_estimated:
+                        W_ps = pscore_sub * (1 - pscore_sub)
+                        try:
+                            XWX = covX_sub.T @ (W_ps[:, None] * covX_sub)
+                            hessian = np.linalg.inv(XWX) * n_sub
+                        except np.linalg.LinAlgError:
+                            hessian = np.linalg.pinv(XWX) * n_sub
+                    else:
+                        hessian = None
                 else:
                     # No covariates: unconditional probability
                     pscore_sub = np.full(n_sub, np.mean(PA4))
@@ -975,7 +987,7 @@ class TripleDifference:
                         try:
                             beta_rs, _, _ = solve_ols(
                                 X_fit, y_fit,
-                                rank_deficient_action="silent",
+                                rank_deficient_action=self.rank_deficient_action,
                             )
                             beta_rs = np.where(np.isnan(beta_rs), 0.0, beta_rs)
                             mu_fitted[cell_mask] = X_fit @ beta_rs

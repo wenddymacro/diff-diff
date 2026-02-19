@@ -825,6 +825,8 @@ has no additional effect.
 - Cluster-robust SE: requires at least 2 clusters (raises `ValueError`)
 - Cluster IDs: must not contain NaN (raises `ValueError`)
 - Overlap warning: emitted when >5% of observations are trimmed at pscore bounds (IPW/DR only)
+- Propensity score estimation failure: falls back to unconditional probability P(subgroup=4),
+  sets hessian=None (skipping PS correction in influence function), emits UserWarning
 - Collinear covariates: detected via pivoted QR in `solve_ols()`, action controlled by
   `rank_deficient_action` ("warn", "error", "silent")
 - NaN inference for undefined statistics:

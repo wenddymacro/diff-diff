@@ -1309,3 +1309,68 @@ class TestParameterFunctionality:
                              covariates=["cov1"])
         overlap_warnings = [x for x in w if "overlap" in str(x.message).lower()]
         assert len(overlap_warnings) == 0
+
+    @pytest.mark.parametrize("method", ["ipw", "dr"])
+    def test_pscore_fallback_warns_and_skips_hessian(self, monkeypatch, method):
+        """PS estimation failure emits warning, sets hessian=None, gives valid results."""
+        data = generate_ddd_data(n_per_cell=50, seed=42, add_covariates=True)
+
+        def _failing_lr(*args, **kwargs):
+            raise RuntimeError("Forced PS failure for testing")
+
+        import diff_diff.triple_diff as td_module
+        monkeypatch.setattr(td_module, "_logistic_regression", _failing_lr)
+
+        ddd = TripleDifference(estimation_method=method)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = ddd.fit(data, outcome="outcome", group="group",
+                             partition="partition", time="time",
+                             covariates=["age"])
+        ps_warnings = [x for x in w
+                       if "propensity score estimation failed"
+                       in str(x.message).lower()]
+        assert len(ps_warnings) > 0, "Expected PS fallback warning"
+        assert np.isfinite(result.att)
+        assert np.isfinite(result.se) and result.se > 0
+
+    def test_r_squared_respects_rank_deficient_action(self):
+        """r_squared computation uses estimator's rank_deficient_action, not hardcoded 'silent'."""
+        data = generate_ddd_data(n_per_cell=50, seed=42, add_covariates=True)
+        data["age_dup"] = data["age"]
+
+        # "silent" should suppress ALL rank warnings (both main and r_squared paths)
+        ddd_silent = TripleDifference(
+            estimation_method="reg", rank_deficient_action="silent",
+        )
+        with warnings.catch_warnings(record=True) as w_silent:
+            warnings.simplefilter("always")
+            result_silent = ddd_silent.fit(
+                data, outcome="outcome", group="group",
+                partition="partition", time="time",
+                covariates=["age", "age_dup"],
+            )
+        rank_silent = [x for x in w_silent
+                       if "rank" in str(x.message).lower()
+                       or "dependent" in str(x.message).lower()]
+
+        # "warn" should emit rank warnings from both main and r_squared paths
+        ddd_warn = TripleDifference(
+            estimation_method="reg", rank_deficient_action="warn",
+        )
+        with warnings.catch_warnings(record=True) as w_warn:
+            warnings.simplefilter("always")
+            result_warn = ddd_warn.fit(
+                data, outcome="outcome", group="group",
+                partition="partition", time="time",
+                covariates=["age", "age_dup"],
+            )
+        rank_warn = [x for x in w_warn
+                     if "rank" in str(x.message).lower()
+                     or "dependent" in str(x.message).lower()]
+
+        assert len(rank_silent) == 0, "silent should suppress all rank warnings"
+        assert len(rank_warn) > 0, "warn should emit rank warnings"
+        # Both should produce finite results regardless
+        assert np.isfinite(result_silent.att)
+        assert np.isfinite(result_warn.att)
