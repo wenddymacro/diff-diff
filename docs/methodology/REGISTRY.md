@@ -13,6 +13,7 @@ This document provides the academic foundations and key implementation requireme
    - [SunAbraham](#sunabraham)
    - [ImputationDiD](#imputationdid)
    - [TwoStageDiD](#twostagedid)
+   - [StackedDiD](#stackeddid)
 3. [Advanced Estimators](#advanced-estimators)
    - [SyntheticDiD](#syntheticdid)
    - [TripleDifference](#tripledifference)
@@ -636,6 +637,96 @@ Our implementation uses multiplier bootstrap on the GMM influence function: clus
 - [x] Always-treated units excluded with warning
 - [x] Multiplier bootstrap on GMM influence function
 - [x] Event study and overall ATT aggregation
+
+---
+
+## StackedDiD
+
+**Primary source:** Wing, C., Freedman, S. M., & Hollingsworth, A. (2024). Stacked Difference-in-Differences. NBER Working Paper 32054. http://www.nber.org/papers/w32054
+
+**Key implementation requirements:**
+
+*Assumption checks / warnings:*
+- Assumption 1 (No Anticipation): ATT(a, a+e) = 0 for all e < 0
+- Assumption 2 (Common Trends): E[Y_{s,a+e}(0) - Y_{s,a-1}(0) | A_s = a] = E[Y_{s,a+e}(0) - Y_{s,a-1}(0) | A_s > a + e]
+- Clean controls must exist for each sub-experiment (IC2)
+- Event window must fit within observed data range (IC1)
+
+*Target parameter (Equation 2):*
+
+    theta_kappa^e = sum_{a in Omega_kappa} ATT(a, a+e) * (N_a^D / N_Omega_kappa^D)
+
+where:
+- `theta_kappa^e` = trimmed aggregate ATT at event time e
+- `Omega_kappa` = trimmed set of adoption events satisfying IC1 and IC2
+- `N_a^D` = number of treated units in sub-experiment a
+- `N_Omega_kappa^D` = total treated units across all sub-experiments in trimmed set
+
+*Estimator equation (Equation 3 — weighted saturated event study, recommended):*
+
+    Y_sae = alpha_0 + alpha_1 * D_sa + sum_{h != -1} [lambda_h * 1(e=h) + delta_h * D_sa * 1(e=h)] + U_sae
+
+Estimated via WLS with Q-weights. The delta_h coefficients identify theta_kappa^e.
+
+*Q-weights (Section 5.3, Table 1):*
+
+    Q_sa = 1                                           if D_sa = 1 (treated)
+    Q_sa = (N_a^D / N^D) / (N_a^C / N^C)             if D_sa = 0 (control, aggregate weighting)
+    Q_sa = (Pop_a^D / Pop^D) / (N_a^C / N^C)         if D_sa = 0 (control, population weighting)
+    Q_sa = ((N_a + N_a^C)/(N^D+N^C)) / (N_a^C/N^C)  if D_sa = 0 (control, sample share weighting)
+
+*Standard errors (Section 5.4):*
+- Default: Cluster-robust standard errors at the group (unit) level
+- Alternative: Cluster at group x sub-experiment level
+- Both approaches yield approximately correct coverage when clusters > 100 (Table 2)
+- No special bootstrap procedure specified; standard cluster-robust SEs recommended
+- For post-period average: delta method or `lincom`/`marginaleffects`
+
+*Edge cases:*
+- All events trimmed: `len(Omega_kappa) == 0` -> ValueError suggesting reduced kappa
+- No clean controls for event a: IC2 check fails -> Trim event, warn user
+- Single cohort in trimmed set: Valid — Q-weights simplify
+- Duplicate observations: Same (unit, time) appears in multiple sub-experiments -> handled by clustering at unit level
+- Constant treatment share across sub-exps: Unweighted FE recovers correct estimand (special case, Section 5.5)
+
+*Algorithm (Section 5):*
+1. Choose kappa_pre, kappa_post event window
+2. Apply IC1 (window fits in data) and IC2 (clean controls exist) to get Omega_kappa
+3. For each a in Omega_kappa: build sub-experiment with treated (A_s = a), clean controls (A_s > a + kappa_post), time window [a - kappa_pre - 1, a + kappa_post]
+4. Stack all sub-experiments vertically
+5. Compute Q-weights based on unit counts per sub-experiment
+6. Run WLS regression of Equation 3 with Q-weights
+7. Extract delta_h coefficients as event-study ATTs
+8. Compute cluster-robust SEs at unit level
+
+*IC1 (Adoption Event Window, Section 3):*
+
+    IC1_a = 1[a - kappa_pre >= T_min  AND  a + kappa_post <= T_max]
+
+Note: Matches R reference implementation (`focalAdoptionTime - kappa_pre >= minTime`).
+The reference period a-1 is included in the window [a-kappa_pre, a+kappa_post] when kappa_pre >= 1.
+The paper text states a stricter bound (T_min + 1) but the R code by the co-author uses T_min.
+
+*IC2 (Clean Controls Exist, Section 3):*
+
+    IC2_a = 1[exists s with A_s > a + kappa_post]    (not_yet_treated)
+    IC2_a = 1[exists s with A_s > a + kappa_post + kappa_pre]  (strict)
+    IC2_a = 1[exists s with A_s = infinity]           (never_treated)
+
+**Reference implementation(s):**
+- R: https://github.com/hollina/stacked-did-weights (`create_sub_exp()`, `compute_weights()`)
+- No Stata or Python package; Stata estimation via standard `reghdfe` with Q-weight column
+
+**Requirements checklist:**
+- [x] Sub-experiment construction with treated + clean controls + time window
+- [x] IC1 and IC2 trimming with warnings
+- [x] Q-weight computation for all three weighting schemes (Table 1)
+- [x] WLS via sqrt(w) transformation
+- [x] Event study regression (Equation 3) with reference period e=-1
+- [x] Cluster-robust SEs at unit or unit x sub-exp level
+- [x] Overall ATT as average of post-treatment delta_h with delta-method SE
+- [x] Anticipation parameter support
+- [x] Never-treated encoding (0 and inf)
 
 ---
 
@@ -1374,6 +1465,7 @@ should be a deliberate user choice.
 | TwoStageDiD | GMM sandwich (Newey & McFadden 1994) | Multiplier bootstrap on GMM influence function |
 | SyntheticDiD | Placebo variance (Alg 4) | Unit-level bootstrap (fixed weights) |
 | TripleDifference | Influence function (all methods) | SE = std(IF) / sqrt(n) |
+| StackedDiD | Cluster-robust (unit) | Cluster at unit × sub-experiment |
 | TROP | Block bootstrap | — |
 | BaconDecomposition | N/A (exact decomposition) | Individual 2×2 SEs |
 | HonestDiD | Inherited from event study | FLCI, C-LF |
@@ -1395,6 +1487,7 @@ should be a deliberate user choice.
 | TwoStageDiD | did2s | `did2s()` |
 | SyntheticDiD | synthdid | `synthdid_estimate()` |
 | TripleDifference | triplediff | `ddd()` |
+| StackedDiD | stacked-did-weights | `create_sub_exp()` + `compute_weights()` |
 | TROP | - | (forthcoming) |
 | BaconDecomposition | bacondecomp | `bacon()` |
 | HonestDiD | HonestDiD | `createSensitivityResults()` |

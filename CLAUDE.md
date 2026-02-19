@@ -144,6 +144,18 @@ pure Rust by default.
 - **`diff_diff/two_stage_bootstrap.py`** - Bootstrap inference:
   - `TwoStageDiDBootstrapMixin` - Mixin with GMM influence function bootstrap methods
 
+- **`diff_diff/stacked_did.py`** - Stacked DiD estimator (Wing et al. 2024):
+  - `StackedDiD` - Stacked DiD with corrective Q-weights for compositional balance
+  - `stacked_did()` - Convenience function
+  - Builds sub-experiments per adoption cohort with clean controls
+  - IC1/IC2 trimming for compositional balance across event times
+  - Q-weights for aggregate, population, or sample share estimands (Table 1)
+  - WLS event study regression via sqrt(w) transformation
+  - Re-exports result class for backward compatibility
+
+- **`diff_diff/stacked_did_results.py`** - Result container classes:
+  - `StackedDiDResults` - Results with overall ATT, event study, group effects, stacked data access
+
 - **`diff_diff/triple_diff.py`** - Triple Difference (DDD) estimator:
   - `TripleDifference` - Ortiz-Villavicencio & Sant'Anna (2025) estimator for DDD designs
   - `TripleDifferenceResults` - Results with ATT, SEs, cell means, diagnostics
@@ -314,6 +326,7 @@ pure Rust by default.
    ├── TwoStageDiD
    ├── TripleDifference
    ├── TROP
+   ├── StackedDiD
    ├── SyntheticDiD
    └── BaconDecomposition
    ```
@@ -429,6 +442,7 @@ Tests mirror the source modules:
 - `tests/test_sun_abraham.py` - Tests for SunAbraham interaction-weighted estimator
 - `tests/test_imputation.py` - Tests for ImputationDiD (Borusyak et al. 2024) estimator
 - `tests/test_two_stage.py` - Tests for TwoStageDiD (Gardner 2022) estimator, including equivalence tests with ImputationDiD
+- `tests/test_stacked_did.py` - Tests for Stacked DiD (Wing et al. 2024) estimator
 - `tests/test_triple_diff.py` - Tests for Triple Difference (DDD) estimator
 - `tests/test_trop.py` - Tests for Triply Robust Panel (TROP) estimator
 - `tests/test_bacon.py` - Tests for Goodman-Bacon decomposition
@@ -444,6 +458,8 @@ Tests mirror the source modules:
 - `tests/test_datasets.py` - Tests for dataset loading functions
 
 Session-scoped `ci_params` fixture in `conftest.py` scales bootstrap iterations and TROP grid sizes in pure Python mode — use `ci_params.bootstrap(n)` and `ci_params.grid(values)` in new tests with `n_bootstrap >= 20`. For SE convergence tests (analytical vs bootstrap comparison), use `ci_params.bootstrap(n, min_n=199)` with a conditional tolerance: `threshold = 0.40 if n_boot < 100 else 0.15`. The `min_n` parameter is capped at 49 in pure Python mode to keep CI fast, so convergence tests use wider tolerances when running with fewer bootstrap iterations.
+
+**Slow test suites:** `tests/test_trop.py` is very time-consuming. Only run TROP tests when changes could affect the TROP estimator (e.g., `diff_diff/trop.py`, `diff_diff/trop_results.py`, `diff_diff/linalg.py`, `diff_diff/_backend.py`, or `rust/src/trop.rs`). For unrelated changes, exclude with `pytest --ignore=tests/test_trop.py`.
 
 ### Test Writing Guidelines
 

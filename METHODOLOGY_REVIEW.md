@@ -27,6 +27,7 @@ Each estimator in diff-diff should be periodically reviewed to ensure:
 | SunAbraham | `sun_abraham.py` | `fixest::sunab()` | **Complete** | 2026-02-15 |
 | SyntheticDiD | `synthetic_did.py` | `synthdid::synthdid_estimate()` | **Complete** | 2026-02-10 |
 | TripleDifference | `triple_diff.py` | `triplediff::ddd()` | **Complete** | 2026-02-18 |
+| StackedDiD | `stacked_did.py` | `stacked-did-weights` | **Complete** | 2026-02-19 |
 | TROP | `trop.py` | (forthcoming) | Not Started | - |
 | BaconDecomposition | `bacon.py` | `bacondecomp::bacon()` | Not Started | - |
 | HonestDiD | `honest_did.py` | `HonestDiD` package | Not Started | - |
@@ -376,6 +377,85 @@ variables appear to the left of the `|` separator.
    when no post-treatment effects exist. R would error.
 2. **Normal distribution for aggregated inference**: Aggregated p-values use normal
    distribution (asymptotically equivalent). R uses t-distribution.
+
+---
+
+#### StackedDiD
+
+| Field | Value |
+|-------|-------|
+| Module | `stacked_did.py` |
+| Primary Reference | Wing, Freedman & Hollingsworth (2024), NBER WP 32054 |
+| R Reference | `stacked-did-weights` (`create_sub_exp()` + `compute_weights()`) |
+| Status | **Complete** |
+| Last Review | 2026-02-19 |
+
+**Verified Components:**
+- [x] IC1 trimming: `a - kappa_pre >= T_min AND a + kappa_post <= T_max` (matches R reference)
+- [x] IC2 trimming: Three clean control modes (not_yet_treated, strict, never_treated)
+- [x] Sub-experiment construction: treated + clean controls within `[a - kappa_pre, a + kappa_post]`
+- [x] Q-weights aggregate: treated Q=1, control `Q_a = (N_a^D / N^D) / (N_a^C / N^C)` (Table 1, Row 1)
+- [x] Q-weights population: `Q_a = (Pop_a^D / Pop^D) / (N_a^C / N^C)` (Table 1, Row 2)
+- [x] Q-weights sample_share: `Q_a = ((N_a^D + N_a^C)/(N^D+N^C)) / (N_a^C / N^C)` (Table 1, Row 3)
+- [x] WLS via sqrt(w) transformation (numerically equivalent to weighted regression)
+- [x] Event study regression: `Y = α_0 + α_1·D_sa + Σ_{h≠-1}[λ_h·1(e=h) + δ_h·D_sa·1(e=h)] + U` (Eq. 3)
+- [x] Reference period e=-1 normalized to zero (omitted from design matrix)
+- [x] Delta-method SE for overall ATT: `SE = sqrt(ones' @ sub_vcv @ ones) / K`
+- [x] Cluster-robust SEs at unit level (default) and unit×sub-experiment level
+- [x] Anticipation parameter shifts treatment window
+- [x] Rank deficiency handling (warn/error/silent via `solve_ols()`)
+- [x] Never-treated encoding: both `first_treat=0` and `first_treat=inf` handled
+- [x] R comparison: ATT matches within machine precision (diff < 2.1e-11)
+- [x] R comparison: SE matches within machine precision (diff < 4.0e-10)
+- [x] R comparison: Event study effects correlation = 1.000000, max diff < 4.5e-11
+- [x] safe_inference() used for all inference fields
+- [x] All REGISTRY.md edge cases tested
+
+**Test Coverage:**
+- 72 tests in `tests/test_stacked_did.py` across 11 test classes:
+  - `TestStackedDiDBasic` (8): fit, event study, group/all/simple aggregation, known constant effect, dynamic effects
+  - `TestTrimming` (5): IC1 window, IC2 no-controls, trimmed groups reported, all-trimmed raises, wider window
+  - `TestQWeights` (4): treated=1, aggregate formula, sample_share formula, positivity
+  - `TestCleanControl` (5): not_yet_treated, strict, never_treated, missing never-treated raises
+  - `TestClustering` (2): unit, unit_subexp
+  - `TestStackedData` (4): accessible, required columns, event time range
+  - `TestEdgeCases` (8): single cohort, anticipation, unbalanced panel, NaN inference, never-treated encodings
+  - `TestSklearnInterface` (4): get_params, set_params, unknown raises, convenience function
+  - `TestResultsMethods` (7): summary, to_dataframe, is_significant, significance_stars, repr
+  - `TestValidation` (8): missing columns, invalid params, population required, no treated units
+- R benchmark tests via `benchmarks/run_benchmarks.py --estimator stacked`
+
+**R Comparison Results (200 units, 8 periods, kappa_pre=2, kappa_post=2):**
+| Metric | Python | R | Diff |
+|--------|--------|---|------|
+| Overall ATT | 2.277699574579 | 2.2776995746 | 2.1e-11 |
+| Overall SE | 0.062045687626 | 0.062045688027 | 4.0e-10 |
+| ES e=-2 ATT | 0.044517975379 | 0.044517975379 | <1e-12 |
+| ES e=0 ATT | 2.104181683763 | 2.104181683800 | <1e-11 |
+| ES e=1 ATT | 2.209990715130 | 2.209990715100 | <1e-11 |
+| ES e=2 ATT | 2.518926324845 | 2.518926324800 | <1e-11 |
+| Stacked obs | 1600 | 1600 | exact |
+| Sub-experiments | 3 | 3 | exact |
+
+**Corrections Made:**
+1. **IC1 lower bound and time window aligned with R reference** (`stacked_did.py`,
+   `_trim_adoption_events()` and `_build_sub_experiment()`): The paper text specifies
+   time window `[a - kappa_pre - 1, a + kappa_post]` (including an extra pre-period),
+   but the R reference implementation by co-author Hollingsworth uses
+   `[a - kappa_pre, a + kappa_post]`. The extra period had no event-study dummy,
+   altering the baseline regression. Fixed to match R: removed `-1` from both
+   IC1 check (`a - kappa_pre >= T_min`) and time window start. Discrepancy documented
+   in `docs/methodology/papers/wing-2024-review.md` Gaps section.
+
+**Outstanding Concerns:**
+- (None — implementation verified correct against R reference)
+
+**Deviations from R's stacked-did-weights:**
+1. **NaN for invalid inference**: Python returns NaN for t_stat/p_value/conf_int when
+   SE is non-finite or zero. R would propagate through `fixest::feols()` error handling.
+2. **Unit counting for Q-weights**: Python uses `nunique()` for distinct unit counts
+   per sub-experiment; R uses observation-level `sum(treat)` grouped by event_time.
+   These are equivalent for balanced panels and both produce identical Q-weights.
 
 ---
 

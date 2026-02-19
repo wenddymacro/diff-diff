@@ -107,6 +107,11 @@ from diff_diff.two_stage import (
     TwoStageDiDResults,
     two_stage_did,
 )
+from diff_diff.stacked_did import (
+    StackedDiD,
+    StackedDiDResults,
+    stacked_did,
+)
 from diff_diff.sun_abraham import (
     SABootstrapResults,
     SunAbraham,
@@ -161,6 +166,7 @@ __all__ = [
     "TwoStageDiD",
     "TripleDifference",
     "TROP",
+    "StackedDiD",
     # Bacon Decomposition
     "BaconDecomposition",
     "BaconDecompositionResults",
@@ -187,6 +193,8 @@ __all__ = [
     "triple_difference",
     "TROPResults",
     "trop",
+    "StackedDiDResults",
+    "stacked_did",
     # Visualization
     "plot_event_study",
     "plot_group_effects",
