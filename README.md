@@ -100,6 +100,7 @@ We provide Jupyter notebook tutorials in `docs/tutorials/`:
 | `08_triple_diff.ipynb` | Triple Difference (DDD) estimation with proper covariate handling |
 | `09_real_world_examples.ipynb` | Real-world data examples (Card-Krueger, Castle Doctrine, Divorce Laws) |
 | `10_trop.ipynb` | Triply Robust Panel (TROP) estimation with factor model adjustment |
+| `13_stacked_did.ipynb` | Stacked DiD (Wing et al. 2024), Q-weights, sub-experiment inspection, trimming, clean control definitions |
 
 ## Data Preparation
 

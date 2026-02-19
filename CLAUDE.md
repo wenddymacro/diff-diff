@@ -407,6 +407,7 @@ See `docs/performance-plan.md` for full optimization details and `docs/benchmark
   - `10_trop.ipynb` - Triply Robust Panel (TROP) estimation with factor model adjustment
   - `11_imputation_did.ipynb` - Imputation DiD (Borusyak et al. 2024), pre-trend test, efficiency comparison
   - `12_two_stage_did.ipynb` - Two-Stage DiD (Gardner 2022), GMM sandwich variance, per-observation effects
+  - `13_stacked_did.ipynb` - Stacked DiD (Wing et al. 2024), Q-weights, sub-experiment inspection, trimming, clean control definitions
 
 ### Benchmarks
 
