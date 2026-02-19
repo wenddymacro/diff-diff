@@ -807,6 +807,7 @@ class TripleDifference:
         pscore_stats = None
         all_pscores = {}  # Collect pscores for diagnostics
         overlap_issues = []  # Collect overlap diagnostics across comparisons
+        any_nonfinite_if = False
 
         with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
             for j in [3, 2, 1]:
@@ -907,8 +908,10 @@ class TripleDifference:
                     hessian, est_method, n_sub,
                 )
 
-                # Replace any NaN in influence function with 0
-                inf_j = np.where(np.isfinite(inf_j), inf_j, 0.0)
+                # Track non-finite IF values (flag for NaN SE later)
+                if not np.all(np.isfinite(inf_j)):
+                    any_nonfinite_if = True
+                    inf_j = np.where(np.isfinite(inf_j), inf_j, 0.0)
 
                 # Pad influence function to full length
                 inf_full = np.zeros(n)
@@ -962,6 +965,17 @@ class TripleDifference:
             ))
         else:
             se = float(np.std(inf_func, ddof=1) / np.sqrt(n))
+
+        # Non-finite IF values make SE undefined
+        if any_nonfinite_if:
+            warnings.warn(
+                "Non-finite values in influence function (likely due to "
+                "extreme propensity scores or near-singular design). "
+                "SE set to NaN.",
+                UserWarning,
+                stacklevel=3,
+            )
+            se = np.nan
 
         # Propensity score stats (for IPW/DR with covariates)
         if has_covariates and est_method != "reg" and all_pscores:
@@ -1533,7 +1547,10 @@ def triple_difference(
         Estimation method: "dr" (doubly robust), "reg" (regression),
         or "ipw" (inverse probability weighting).
     robust : bool, default=True
-        Whether to use robust standard errors.
+        Whether to use heteroskedasticity-robust standard errors.
+        Note: influence function-based SEs are inherently robust to
+        heteroskedasticity, so this parameter has no effect. Retained
+        for API compatibility.
     cluster : str, optional
         Column name for cluster-robust standard errors.
     alpha : float, default=0.05

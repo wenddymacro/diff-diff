@@ -829,6 +829,9 @@ has no additional effect.
   sets hessian=None (skipping PS correction in influence function), emits UserWarning
 - Collinear covariates: detected via pivoted QR in `solve_ols()`, action controlled by
   `rank_deficient_action` ("warn", "error", "silent")
+- Non-finite influence function values (e.g., from extreme propensity scores in IPW/DR
+  or near-singular design): warns and sets SE to NaN, propagated to t_stat/p_value/CI
+  via safe_inference()
 - NaN inference for undefined statistics:
   - t_stat: Uses NaN (not 0.0) when SE is non-finite or zero
   - p_value and CI: Also NaN when t_stat is NaN

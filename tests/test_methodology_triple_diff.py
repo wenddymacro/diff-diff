@@ -1334,6 +1334,42 @@ class TestParameterFunctionality:
         assert np.isfinite(result.att)
         assert np.isfinite(result.se) and result.se > 0
 
+    @pytest.mark.parametrize("method", ["ipw", "dr"])
+    def test_nonfinite_if_propagates_nan_se(self, monkeypatch, method):
+        """Non-finite IF values produce NaN SE and NaN inference fields."""
+        data = generate_ddd_data(n_per_cell=50, seed=42, add_covariates=True)
+
+        import diff_diff.triple_diff as td_module
+
+        original_did_rc = td_module.TripleDifference._compute_did_rc
+
+        def _did_rc_with_nan(self_inner, *args, **kwargs):
+            att, inf = original_did_rc(self_inner, *args, **kwargs)
+            inf[0] = np.inf  # Inject non-finite value
+            return att, inf
+
+        monkeypatch.setattr(
+            td_module.TripleDifference, "_compute_did_rc", _did_rc_with_nan,
+        )
+
+        ddd = TripleDifference(estimation_method=method)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = ddd.fit(data, outcome="outcome", group="group",
+                             partition="partition", time="time",
+                             covariates=["age"])
+        nonfinite_warnings = [
+            x for x in w if "non-finite" in str(x.message).lower()
+        ]
+        assert len(nonfinite_warnings) > 0, "Expected non-finite IF warning"
+        assert np.isnan(result.se), "SE should be NaN when IF has non-finite values"
+        assert_nan_inference({
+            "se": result.se,
+            "t_stat": result.t_stat,
+            "p_value": result.p_value,
+            "conf_int": result.conf_int,
+        })
+
     def test_r_squared_respects_rank_deficient_action(self):
         """r_squared computation uses estimator's rank_deficient_action, not hardcoded 'silent'."""
         data = generate_ddd_data(n_per_cell=50, seed=42, add_covariates=True)
