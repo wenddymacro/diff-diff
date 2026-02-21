@@ -10,6 +10,7 @@ This document provides the academic foundations and key implementation requireme
    - [TwoWayFixedEffects](#twowayfixedeffects)
 2. [Modern Staggered Estimators](#modern-staggered-estimators)
    - [CallawaySantAnna](#callawaysantanna)
+   - [ContinuousDiD](#continuousdid)
    - [SunAbraham](#sunabraham)
    - [ImputationDiD](#imputationdid)
    - [TwoStageDiD](#twostagedid)
@@ -389,6 +390,55 @@ The multiplier bootstrap uses random weights w_i with E[w]=0 and Var(w)=1:
 - [ ] Aggregations: simple, event_study, group all implemented
 - [ ] Doubly robust estimation when covariates provided
 - [ ] Multiplier bootstrap preserves panel structure
+
+---
+
+## ContinuousDiD
+
+**Primary Source:** Callaway, Goodman-Bacon & Sant'Anna (2024), "Difference-in-Differences with a Continuous Treatment," NBER Working Paper 32117.
+
+**R Reference:** `contdid` v0.1.0 (CRAN).
+
+### Identification
+
+Under **Strong Parallel Trends** (SPT): for all doses d in D_+,
+`E[Y_t(0) - Y_{t-1}(0) | D = d] = E[Y_t(0) - Y_{t-1}(0) | D = 0]`.
+
+This is stronger than standard PT because it conditions on specific dose values.
+
+### Key Equations
+
+**Target parameters:**
+- `ATT(d) = E[Y_t(d) - Y_t(0) | D > 0]` — dose-response curve
+- `ACRT(d) = dATT(d)/dd` — average causal response (marginal effect)
+- `ATT^{glob} = E[Delta Y | D > 0] - E[Delta Y | D = 0]` — binarized ATT
+- `ACRT^{glob} = E[ACRT(D_i) | D > 0]` — plug-in average marginal effect
+
+**Estimation via B-spline OLS:**
+1. Compute `Delta_tilde_Y = (Y_t - Y_{t-1})_treated - mean((Y_t - Y_{t-1})_control)`
+2. Build B-spline basis `Psi(D_i)` from treated doses
+3. OLS: `beta = (Psi'Psi)^{-1} Psi' Delta_tilde_Y`
+4. `ATT(d) = Psi(d)' beta`, `ACRT(d) = dPsi(d)/dd' beta`
+
+### Edge Cases
+
+- **No untreated group**: Remark 3.1 (lowest-dose-as-control) not implemented; requires P(D=0) > 0.
+- **Discrete treatment**: Detect integer-valued dose and warn; saturated regression deferred.
+- **All-same dose**: B-spline basis collapses; ACRT(d) = 0 everywhere.
+- **Rank deficiency**: When n_treated <= n_basis, cell is skipped.
+- **Balanced panel required**: Matches R `contdid` v0.1.0.
+
+### Implementation Checklist
+
+- [x] B-spline basis construction matching R's `splines2::bSpline`
+- [x] Multi-period (g,t) cell iteration with base period selection
+- [x] Dose-response and event-study aggregation with n_treated weights
+- [x] Multiplier bootstrap for inference
+- [x] Analytical SEs via influence functions
+- [x] Equation verification tests (linear, quadratic, multi-period)
+- [ ] Covariate support (deferred, matching R v0.1.0)
+- [ ] Discrete treatment saturated regression
+- [ ] Lowest-dose-as-control (Remark 3.1)
 
 ---
 
@@ -1487,6 +1537,7 @@ should be a deliberate user choice.
 | SunAbraham | fixest | `sunab()` |
 | ImputationDiD | didimputation | `did_imputation()` |
 | TwoStageDiD | did2s | `did2s()` |
+| ContinuousDiD | contdid | `cont_did()` |
 | SyntheticDiD | synthdid | `synthdid_estimate()` |
 | TripleDifference | triplediff | `ddd()` |
 | StackedDiD | stacked-did-weights | `create_sub_exp()` + `compute_weights()` |
