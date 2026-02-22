@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-02-22
+
+### Added
+- **Continuous DiD estimator** (`ContinuousDiD`) implementing Callaway, Goodman-Bacon & Sant'Anna (2024)
+  for continuous treatment dose-response analysis
+  - `ContinuousDiDResults` with dose-response curves and event-study effects
+  - `DoseResponseCurve` with bootstrap p-values
+  - Analytical and bootstrap event-study SEs
+  - P(D=0) warning for low-probability control groups
+- Stacked DiD tutorial (Tutorial 13) with Q-weight computation walkthrough
+
+### Changed
+- Clarify aggregate Q-weight computation for unbalanced panels in Stacked DiD tutorial
+- Replace SunAbraham manual bootstrap stats with NaN-gated utility
+
+### Fixed
+- Fix not-yet-treated control mask to respect anticipation parameter in ContinuousDiD
+- Guard non-finite `original_effect` in `compute_effect_bootstrap_stats`
+- Fix bootstrap NaN propagation for rank-deficient cells
+- Fix NaN propagation in rank-deficient spline predictions
+- Guard bootstrap NaN propagation: SE/CI/p-value all NaN when SE invalid
+- Fix bootstrap ACRT^{glob} centering bug
+- Fix bootstrap percentile inference and analytical event-study SE scaling
+- Fix control group bug and dose validation in ContinuousDiD
+
 ## [2.5.0] - 2026-02-19
 
 ### Added
@@ -808,6 +833,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `to_dict()` and `to_dataframe()` export methods
   - `is_significant` and `significance_stars` properties
 
+[2.6.0]: https://github.com/igerber/diff-diff/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/igerber/diff-diff/compare/v2.4.3...v2.5.0
 [2.4.3]: https://github.com/igerber/diff-diff/compare/v2.4.2...v2.4.3
 [2.4.2]: https://github.com/igerber/diff-diff/compare/v2.4.1...v2.4.2
