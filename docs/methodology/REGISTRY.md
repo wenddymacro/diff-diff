@@ -425,7 +425,8 @@ See `docs/methodology/continuous-did.md` Section 4 for full details.
 - `ATT(d|d) = E[Y_t(d) - Y_t(0) | D = d]` — effect of dose d on units who received dose d (PT)
 - `ATT(d) = E[Y_t(d) - Y_t(0) | D > 0]` — dose-response curve (SPT required)
 - `ACRT(d) = dATT(d)/dd` — average causal response / marginal effect (SPT required)
-- `ATT^{glob} = E[Delta Y | D > 0] - E[Delta Y | D = 0]` — binarized ATT (PT)
+- `ATT^{loc} = E[ATT(D|D) | D > 0] = E[Delta Y | D > 0] - E[Delta Y | D = 0]` — binarized ATT (PT); equals `ATT^{glob}` under SPT
+- `ATT^{glob} = E[ATT(D) | D > 0]` — global average dose-response level (SPT required)
 - `ACRT^{glob} = E[ACRT(D_i) | D > 0]` — plug-in average marginal effect (SPT required)
 
 **Estimation via B-spline OLS:**
