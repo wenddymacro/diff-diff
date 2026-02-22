@@ -90,7 +90,7 @@ class ContinuousDiDResults:
     dose_response_acrt : DoseResponseCurve
         ACRT(d) dose-response curve.
     overall_att : float
-        Binarized overall ATT^{glob}.
+        Binarized overall ATT (ATT^{loc} under PT, equals ATT^{glob} under SPT).
     overall_acrt : float
         Plug-in overall ACRT^{glob}.
     group_time_effects : dict

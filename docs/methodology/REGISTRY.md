@@ -403,18 +403,31 @@ The multiplier bootstrap uses random weights w_i with E[w]=0 and Var(w)=1:
 
 ### Identification
 
-Under **Strong Parallel Trends** (SPT): for all doses d in D_+,
-`E[Y_t(0) - Y_{t-1}(0) | D = d] = E[Y_t(0) - Y_{t-1}(0) | D = 0]`.
+Two levels of parallel trends (following CGBS 2024, Assumptions 1-2):
 
-This is stronger than standard PT because it conditions on specific dose values.
+**Parallel Trends (PT):** for all doses d in D_+,
+`E[Y_t(0) - Y_{t-1}(0) | D = d] = E[Y_t(0) - Y_{t-1}(0) | D = 0]`.
+Untreated potential outcome paths are the same across all dose groups and the
+untreated group. Stronger than binary PT because it conditions on specific dose values.
+Identifies: `ATT(d|d)`, `ATT^{loc}`. Does NOT identify `ATT(d)`, `ACRT`, or cross-dose comparisons.
+
+**Strong Parallel Trends (SPT):** additionally, for all d in D,
+`E[Y_t(d) - Y_{t-1}(0) | D > 0] = E[Y_t(d) - Y_{t-1}(0) | D = d]`.
+No selection into dose groups on the basis of treatment effects.
+Implies `ATT(d|d) = ATT(d)` for all d.
+Additionally identifies: `ATT(d)`, `ACRT(d)`, `ACRT^{glob}`, and cross-dose comparisons.
+
+See `docs/methodology/continuous-did.md` Section 4 for full details.
 
 ### Key Equations
 
 **Target parameters:**
-- `ATT(d) = E[Y_t(d) - Y_t(0) | D > 0]` — dose-response curve
-- `ACRT(d) = dATT(d)/dd` — average causal response (marginal effect)
-- `ATT^{glob} = E[Delta Y | D > 0] - E[Delta Y | D = 0]` — binarized ATT
-- `ACRT^{glob} = E[ACRT(D_i) | D > 0]` — plug-in average marginal effect
+- `ATT(d|d) = E[Y_t(d) - Y_t(0) | D = d]` — effect of dose d on units who received dose d (PT)
+- `ATT(d) = E[Y_t(d) - Y_t(0) | D > 0]` — dose-response curve (SPT required)
+- `ACRT(d) = dATT(d)/dd` — average causal response / marginal effect (SPT required)
+- `ATT^{loc} = E[ATT(D|D) | D > 0] = E[Delta Y | D > 0] - E[Delta Y | D = 0]` — binarized ATT (PT); equals `ATT^{glob}` under SPT
+- `ATT^{glob} = E[ATT(D) | D > 0]` — global average dose-response level (SPT required)
+- `ACRT^{glob} = E[ACRT(D_i) | D > 0]` — plug-in average marginal effect (SPT required)
 
 **Estimation via B-spline OLS:**
 1. Compute `Delta_tilde_Y = (Y_t - Y_{t-1})_treated - mean((Y_t - Y_{t-1})_control)`
