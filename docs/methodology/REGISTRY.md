@@ -10,6 +10,7 @@ This document provides the academic foundations and key implementation requireme
    - [TwoWayFixedEffects](#twowayfixedeffects)
 2. [Modern Staggered Estimators](#modern-staggered-estimators)
    - [CallawaySantAnna](#callawaysantanna)
+   - [ContinuousDiD](#continuousdid)
    - [SunAbraham](#sunabraham)
    - [ImputationDiD](#imputationdid)
    - [TwoStageDiD](#twostagedid)
@@ -340,13 +341,15 @@ The multiplier bootstrap uses random weights w_i with E[w]=0 and Var(w)=1:
 - Anticipation: `anticipation` parameter shifts reference period
   - Group aggregation includes periods t >= g - anticipation (not just t >= g)
   - Both analytical SE and bootstrap SE aggregation respect anticipation
+  - Not-yet-treated + anticipation: control mask uses `G > t + anticipation`
+    (not just `G > t`) to exclude cohorts in the anticipation window
 - Rank-deficient design matrix (covariate collinearity):
   - Detection: Pivoted QR decomposition with tolerance `1e-07` (R's `qr()` default)
   - Handling: Warns and drops linearly dependent columns, sets NA for dropped coefficients (R-style, matches `lm()`)
   - Parameter: `rank_deficient_action` controls behavior: "warn" (default), "error", or "silent"
 - Non-finite inference values:
   - Analytic SE: Returns NaN to signal invalid inference (not biased via zeroing)
-  - Bootstrap: Drops non-finite samples, warns, and adjusts p-value floor accordingly
+  - Bootstrap: Drops non-finite samples, warns, and adjusts p-value floor accordingly. SE, CI, and p-value are all NaN if the original point estimate is non-finite, SE is non-finite or zero (e.g., n_valid=1 with ddof=1, or identical samples)
   - Threshold: Returns NaN if <50% of bootstrap samples are valid
   - Per-effect t_stat: Uses NaN (not 0.0) when SE is non-finite or zero (consistent with overall_t_stat)
   - **Note**: This is a defensive enhancement over reference implementations (R's `did::att_gt`, Stata's `csdid`) which may error or produce unhandled inf/nan in edge cases without informative warnings
@@ -377,7 +380,7 @@ The multiplier bootstrap uses random weights w_i with E[w]=0 and Var(w)=1:
   - Always excludes cohort g from controls when computing ATT(g,t)
   - This applies to both pre-treatment (t < g) and post-treatment (t >= g) periods
   - For pre-treatment periods: even though cohort g hasn't been treated yet at time t, they are the treated group for this ATT(g,t) and cannot serve as their own controls
-  - Control mask: `never_treated OR (first_treat > t AND first_treat != g)`
+  - Control mask: `never_treated OR (first_treat > t + anticipation AND first_treat != g)`
 
 **Reference implementation(s):**
 - R: `did::att_gt()` (Callaway & Sant'Anna's official package)
@@ -389,6 +392,60 @@ The multiplier bootstrap uses random weights w_i with E[w]=0 and Var(w)=1:
 - [ ] Aggregations: simple, event_study, group all implemented
 - [ ] Doubly robust estimation when covariates provided
 - [ ] Multiplier bootstrap preserves panel structure
+
+---
+
+## ContinuousDiD
+
+**Primary Source:** Callaway, Goodman-Bacon & Sant'Anna (2024), "Difference-in-Differences with a Continuous Treatment," NBER Working Paper 32117.
+
+**R Reference:** `contdid` v0.1.0 (CRAN).
+
+### Identification
+
+Under **Strong Parallel Trends** (SPT): for all doses d in D_+,
+`E[Y_t(0) - Y_{t-1}(0) | D = d] = E[Y_t(0) - Y_{t-1}(0) | D = 0]`.
+
+This is stronger than standard PT because it conditions on specific dose values.
+
+### Key Equations
+
+**Target parameters:**
+- `ATT(d) = E[Y_t(d) - Y_t(0) | D > 0]` — dose-response curve
+- `ACRT(d) = dATT(d)/dd` — average causal response (marginal effect)
+- `ATT^{glob} = E[Delta Y | D > 0] - E[Delta Y | D = 0]` — binarized ATT
+- `ACRT^{glob} = E[ACRT(D_i) | D > 0]` — plug-in average marginal effect
+
+**Estimation via B-spline OLS:**
+1. Compute `Delta_tilde_Y = (Y_t - Y_{t-1})_treated - mean((Y_t - Y_{t-1})_control)`
+2. Build B-spline basis `Psi(D_i)` from treated doses
+3. OLS: `beta = (Psi'Psi)^{-1} Psi' Delta_tilde_Y`
+4. `ATT(d) = Psi(d)' beta`, `ACRT(d) = dPsi(d)/dd' beta`
+
+### Edge Cases
+
+- **No untreated group**: Remark 3.1 (lowest-dose-as-control) not implemented; requires P(D=0) > 0.
+- **Discrete treatment**: Detect integer-valued dose and warn; saturated regression deferred.
+- **All-same dose**: B-spline basis collapses; ACRT(d) = 0 everywhere.
+- **Rank deficiency**: When n_treated <= n_basis, cell is skipped.
+- **Balanced panel required**: Matches R `contdid` v0.1.0.
+- **Anticipation + not-yet-treated**: Control mask uses `G > t + anticipation`
+  (not just `G > t`) to exclude cohorts in the anticipation window from
+  not-yet-treated controls. When `anticipation=0` (default), behavior is
+  unchanged.
+- **Boundary knots**: Knots are built once from all treated doses (global, not per-cell) to ensure a common basis across (g,t) cells for aggregation. Evaluation grid is clamped to training-dose boundary knots (`range(dose)`). R's `contdid` v0.1.0 has an inconsistency where `splines2::bSpline(dvals)` uses `range(dvals)` instead of `range(dose)`, which can produce extrapolation artifacts at dose grid extremes. Our approach avoids extrapolation and is methodologically sound.
+
+### Implementation Checklist
+
+- [x] B-spline basis construction matching R's `splines2::bSpline` (global knots from all treated doses; boundary knots use training-dose range; see deviation note above)
+- [x] Multi-period (g,t) cell iteration with base period selection
+- [x] Dose-response and event-study aggregation with group-proportional weights (n_treated/n_total per group, divided among post-treatment cells; R `ptetools` convention)
+- [x] Multiplier bootstrap for inference
+- [x] Analytical SEs via influence functions
+- [x] Equation verification tests (linear, quadratic, multi-period)
+- [ ] Covariate support (deferred, matching R v0.1.0)
+- [ ] Discrete treatment saturated regression
+- [ ] Lowest-dose-as-control (Remark 3.1)
 
 ---
 
@@ -437,7 +494,7 @@ where weights ŵ_{g,e} = n_{g,e} / Σ_g n_{g,e} (sample share of cohort g at eve
 - NaN inference for undefined statistics:
   - t_stat: Uses NaN (not 0.0) when SE is non-finite or zero
   - Analytical inference: p_value and CI also NaN when t_stat is NaN (NaN propagates through `compute_p_value` and `compute_confidence_interval`)
-  - Bootstrap inference: p_value and CI computed from bootstrap distribution, may be valid even when SE/t_stat is NaN (only NaN if <50% of bootstrap samples are valid)
+  - Bootstrap inference: p_value and CI computed from bootstrap distribution. SE, CI, and p-value are all NaN if the original point estimate is non-finite, SE is non-finite or zero, or if <50% of bootstrap samples are valid
   - Applies to overall ATT, per-effect event study, and aggregated event study
   - **Note**: Defensive enhancement matching CallawaySantAnna behavior; R's `fixest::sunab()` may produce Inf/NaN without warning
 - Inference distribution:
@@ -1487,6 +1544,7 @@ should be a deliberate user choice.
 | SunAbraham | fixest | `sunab()` |
 | ImputationDiD | didimputation | `did_imputation()` |
 | TwoStageDiD | did2s | `did2s()` |
+| ContinuousDiD | contdid | `cont_did()` |
 | SyntheticDiD | synthdid | `synthdid_estimate()` |
 | TripleDifference | triplediff | `ddd()` |
 | StackedDiD | stacked-did-weights | `create_sub_exp()` + `compute_weights()` |
