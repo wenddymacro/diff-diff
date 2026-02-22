@@ -405,7 +405,7 @@ class CarouselV26PDF(FPDF):
 
         steps = [
             "Compute outcome changes relative to control group mean",
-            "Fit B-spline regression of dose on demeaned outcomes",
+            "Fit B-spline regression of demeaned outcomes on dose",
             "Evaluate ATT(d) level effects and ACRT(d) marginal effects",
         ]
 
@@ -731,7 +731,7 @@ class CarouselV26PDF(FPDF):
                 "badge": "Standard PT",
                 "badge_color": MID_BLUE,
                 "headline": "Parallel trends in untreated outcomes",
-                "identifies": "ATT(d) level effects per dose group",
+                "identifies": "ATT(d|d) level effects within each dose group",
                 "meaning": "Counterfactual trends are the same across\n"
                            "all dose groups and the untreated.",
             },
@@ -808,7 +808,7 @@ class CarouselV26PDF(FPDF):
     # ── Slide 8: Code Example ─────────────────────────────────────────
 
     def slide_code(self):
-        """Slide 7: Drop-in API code example."""
+        """Slide 8: Drop-in API code example."""
         self.add_page()
         self.light_gradient_background()
 
@@ -863,7 +863,7 @@ class CarouselV26PDF(FPDF):
 
         self.add_footer()
 
-    # ── Slide 8: Use Cases ────────────────────────────────────────────
+    # ── Slide 9: Use Cases ────────────────────────────────────────────
 
     def slide_use_cases(self):
         """Slide 9: Where Dose Matters — 2x2 grid of use-case cards."""
@@ -932,7 +932,7 @@ class CarouselV26PDF(FPDF):
 
         self.add_footer()
 
-    # ── Slide 9: Full Toolkit ─────────────────────────────────────────
+    # ── Slide 10: Full Toolkit ────────────────────────────────────────
 
     def slide_full_toolkit(self):
         """Slide 10: Every Method You Need — 6x2 grid (11 methods, last centered)."""
@@ -1004,10 +1004,10 @@ class CarouselV26PDF(FPDF):
         )
         self.add_footer()
 
-    # ── Slide 10: CTA ─────────────────────────────────────────────────
+    # ── Slide 11: CTA ─────────────────────────────────────────────────
 
     def slide_cta(self):
-        """Slide 10: Upgrade to v2.6."""
+        """Slide 11: Upgrade to v2.6."""
         self.add_page()
         self.light_gradient_background()
 
