@@ -5,7 +5,7 @@
 We tested whether the practitioner guide documentation changes the behavior of
 AI agents when performing Difference-in-Differences analysis. Each agent was
 given documentation and an identical task prompt, then scored against a
-correctness-aware rubric derived from Baker et al. (2025).
+correctness-aware rubric derived from Baker et al. (2026).
 
 **Task prompt**: "Estimate the effect of a policy intervention using a staggered
 difference-in-differences design using the load_mpdta() dataset."

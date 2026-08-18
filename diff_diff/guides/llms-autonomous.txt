@@ -17,7 +17,7 @@ discusses and that this guide does not pretend to resolve.
   → `BusinessReport`. Stateless; calls nothing internally.
 
 **Pair this guide with:**
-- `get_llm_guide("practitioner")` - the Baker et al. (2025) 8-step validation
+- `get_llm_guide("practitioner")` - the Baker et al. (2026) 8-step validation
   workflow in workflow-prose form.
 - `get_llm_guide("full")` - comprehensive API documentation for every public
   function and class.
@@ -1026,7 +1026,7 @@ Reasoning chain:
 
 ## §6. Post-fit validation utilities
 
-After any `fit()`, the Baker et al. (2025) 8-step workflow recommends a
+After any `fit()`, the Baker et al. (2026) 8-step workflow recommends a
 diagnostic sequence. The library exposes utilities covering each step.
 Consult `get_llm_guide("practitioner")` for the workflow-prose form; this
 section is the API-reference index.
@@ -1242,10 +1242,12 @@ or the outcome model is correctly specified.
 ### Primary references
 
 - **Baker, Andrew, Brantly Callaway, Scott Cunningham, Andrew
-  Goodman-Bacon, and Pedro H. C. Sant'Anna (2025).** "Difference-in-
-  Differences Designs: A Practitioner's Guide." arXiv:2503.13323.
-  The 8-step workflow and best-practice framing. Ships as
-  `get_llm_guide("practitioner")`.
+  Goodman-Bacon, and Pedro H. C. Sant'Anna (2026).** "Difference-in-
+  Differences Designs: A Practitioner's Guide." Journal of Economic
+  Literature 64 (2): 498-557. https://doi.org/10.1257/jel.20251650
+  (previously circulated as arXiv:2503.13323 - cite the published
+  version). The 8-step workflow (its Section 6, pp. 550-552) and
+  best-practice framing. Ships as `get_llm_guide("practitioner")`.
 - **Roth, Jonathan, Pedro H. C. Sant'Anna, Alyssa Bilinski, and John
   Poe (2023).** "What's Trending in Difference-in-Differences? A
   Synthesis of the Recent Econometrics Literature." Journal of

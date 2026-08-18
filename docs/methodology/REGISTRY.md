@@ -6475,8 +6475,9 @@ Domain estimation preserving full design structure.
 
 # Practitioner Guide
 
-The 8-step workflow in `diff_diff/guides/llms-practitioner.txt` is adapted from Baker et al. (2025)
-"Difference-in-Differences Designs: A Practitioner's Guide" (arXiv:2503.13323), not a
+The 8-step workflow in `diff_diff/guides/llms-practitioner.txt` is adapted from Baker et al. (2026)
+"Difference-in-Differences Designs: A Practitioner's Guide," *Journal of Economic Literature* 64(2):
+498-557 (https://doi.org/10.1257/jel.20251650; previously circulated as arXiv:2503.13323), not a
 1:1 mapping of the paper's forward-engineering framework.
 
 - **Note:** The diff-diff canonical numbering is: 1-Define, 2-Assumptions, 3-Test PT,

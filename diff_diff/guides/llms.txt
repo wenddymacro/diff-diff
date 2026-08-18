@@ -10,7 +10,7 @@ diff-diff offers 23 estimators covering basic 2x2 DiD, modern staggered adoption
 - Source: https://github.com/igerber/diff-diff
 - Docs: https://diff-diff.readthedocs.io/en/stable/
 
-## Practitioner Workflow (based on Baker et al. 2025)
+## Practitioner Workflow (based on Baker et al. 2026)
 
 IMPORTANT: For rigorous DiD analysis, follow these 8 steps. Skipping
 diagnostic steps produces unreliable results.
@@ -40,7 +40,7 @@ The site is organized into 5 sections, each with a landing page:
 
 ### Getting Started
 
-- **Practitioner Guide** (call `diff_diff.get_llm_guide("practitioner")`): 8-step workflow for rigorous DiD analysis (Baker et al. 2025) — **start here**
+- **Practitioner Guide** (call `diff_diff.get_llm_guide("practitioner")`): 8-step workflow for rigorous DiD analysis (Baker et al. 2026) — **start here**
 - [Quickstart](https://diff-diff.readthedocs.io/en/stable/quickstart.html): Installation, basic 2x2 DiD — column-name and formula interfaces, covariates, fixed effects, cluster-robust SEs
 - [Choosing an Estimator](https://diff-diff.readthedocs.io/en/stable/choosing_estimator.html): Decision flowchart for selecting the right estimator for your research design
 - [Troubleshooting](https://diff-diff.readthedocs.io/en/stable/troubleshooting.html): Common issues and solutions

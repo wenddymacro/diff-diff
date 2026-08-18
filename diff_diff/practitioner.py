@@ -1,7 +1,7 @@
 """
 Practitioner guidance for Difference-in-Differences analysis.
 
-Implements Baker et al. (2025) "Difference-in-Differences Designs:
+Implements Baker et al. (2026) "Difference-in-Differences Designs:
 A Practitioner's Guide" as context-aware runtime guidance. Call
 ``practitioner_next_steps(results)`` after estimation to get a
 structured set of recommended next steps.
@@ -96,7 +96,7 @@ def practitioner_next_steps(
     verbose: bool = True,
 ) -> Dict[str, Any]:
     """
-    Context-aware practitioner guidance based on Baker et al. (2025).
+    Context-aware practitioner guidance based on Baker et al. (2026).
 
     Inspects the type and attributes of *results* to recommend which
     Baker et al. steps remain. Returns a structured dict and optionally
@@ -2339,7 +2339,7 @@ def _print_output(output: Dict[str, Any]) -> None:
     """Print human-readable guidance to stdout."""
     print(f"\n{'='*60}")
     print(f"Practitioner Guidance — {output['estimator']}")
-    print("Baker et al. (2025) 8-Step Workflow")
+    print("Baker et al. (2026) 8-Step Workflow")
     print(f"{'='*60}")
 
     if output["warnings"]:

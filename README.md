@@ -57,13 +57,13 @@ results.print_summary()     # full statsmodels-style table
 
 ## For AI Agents
 
-If you are an AI agent or LLM using this library, call `diff_diff.get_llm_guide()` for a concise API reference with an 8-step practitioner workflow (based on Baker et al. 2025). The workflow ensures rigorous DiD analysis - testing assumptions, running sensitivity analysis, and checking robustness, not just calling `fit()`.
+If you are an AI agent or LLM using this library, call `diff_diff.get_llm_guide()` for a concise API reference with an 8-step practitioner workflow (based on Baker et al. 2026). The workflow ensures rigorous DiD analysis - testing assumptions, running sensitivity analysis, and checking robustness, not just calling `fit()`.
 
 ```python
 from diff_diff import get_llm_guide
 
 get_llm_guide()                 # concise API reference
-get_llm_guide("practitioner")   # 8-step workflow (Baker et al. 2025)
+get_llm_guide("practitioner")   # 8-step workflow (Baker et al. 2026)
 get_llm_guide("full")           # comprehensive documentation
 get_llm_guide("autonomous")     # autonomous-agent variant
 ```
@@ -81,7 +81,7 @@ Measuring campaign lift? Evaluating a product launch? Rolling out a policy in wa
 
 `BusinessReport` and `DiagnosticReport` are experimental preview classes that produce plain-English output and a structured `to_dict()` schema from any fitted result - wording and schema will evolve. See [docs/methodology/REPORTING.md](https://github.com/igerber/diff-diff/blob/main/docs/methodology/REPORTING.md) for usage and stability notes.
 
-## Practitioner Workflow (Baker et al. 2025)
+## Practitioner Workflow (Baker et al. 2026)
 
 For rigorous DiD analysis, follow these 8 steps. Skipping diagnostic steps produces unreliable results.
 

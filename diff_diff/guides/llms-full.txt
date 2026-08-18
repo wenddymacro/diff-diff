@@ -31,7 +31,7 @@ print(f"ATT: {results.att:.3f} (SE: {results.se:.3f})")
 - **Results objects**: Rich dataclass containers with `summary()`, `to_dict()`, `to_dataframe()`.
 - **Estimator aliases**: Short names available (e.g., `DiD`, `CS`, `SA`, `BJS`, `SDiD`, `TWFE`, `DDD`, `EDiD`, `SCM`, `Bacon`). The former `CDiD`/`Gardner`/`Stacked` aliases are deprecated (3.9, removed in 4.0) - use `ContinuousDiD`/`TwoStageDiD`/`StackedDiD`.
 
-## Practitioner Workflow (based on Baker et al. 2025)
+## Practitioner Workflow (based on Baker et al. 2026)
 
 For rigorous DiD analysis, follow the 8-step framework (call `diff_diff.get_llm_guide("practitioner")`).
 After estimation, call:

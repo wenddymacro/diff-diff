@@ -13,7 +13,7 @@ The orchestrator names the full sequence:
     5. Report:                diff_diff.BusinessReport(result)
 
 For a comprehensive API reference call ``diff_diff.get_llm_guide("full")``.
-For the Baker et al. (2025) 8-step practitioner recipe call
+For the Baker et al. (2026) 8-step practitioner recipe call
 ``diff_diff.get_llm_guide("practitioner")``.
 
 This library provides sklearn-like estimators for causal inference using
