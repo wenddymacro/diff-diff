@@ -9,7 +9,7 @@ isolated `fit()` calls.
 See [`docs/performance-scenarios.md`](../../docs/performance-scenarios.md) for
 the full methodology. Short version: the existing benchmarks measure
 `fit()` in isolation on 200 x 8 synthetic panels, which does not reflect what
-a practitioner running the 8-step Baker et al. (2025) workflow on a real
+a practitioner running the 8-step Baker et al. (2026) workflow on a real
 BRFSS or geo-experiment panel actually sees. These scripts measure the full
 chain (Bacon -> fit -> HonestDiD -> cross-estimator robustness -> reporting)
 at data shapes anchored to applied-econ conventions.

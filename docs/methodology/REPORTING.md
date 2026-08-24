@@ -93,7 +93,7 @@ meaningfully different estimands — a stakeholder reading
 `overall_att = -0.0214` on a Callaway-Sant'Anna fit cannot tell
 whether that is the simple-weighted average across `ATT(g,t)`
 cells, an event-study-weighted aggregate, or a group-weighted
-aggregate. Baker et al. (2025) Step 2 is "Define the target
+aggregate. Baker et al. (2026) Step 2 is "Define the target
 parameter"; BR/DR does that work for the user.
 
 Schema shape:

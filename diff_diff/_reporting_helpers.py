@@ -29,7 +29,7 @@ def describe_target_parameter(results: Any) -> Dict[str, Any]:
 
     The block names what scalar the headline number actually
     represents (overall ATT, DID_M, dose-response ATT(d|d), etc.) so
-    BR/DR output is self-contained. Baker et al. (2025) Step 2 is
+    BR/DR output is self-contained. Baker et al. (2026) Step 2 is
     "Define the target parameter"; this helper does that work for the
     user.
 

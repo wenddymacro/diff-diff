@@ -65,7 +65,7 @@ Long-running program, framed as "building toward" rather than with discrete ship
 
 **Vision.** A practitioner hands an AI agent a business scenario. The agent, with diff-diff as its toolkit, interprets the scenario, selects the correct estimator and identification strategy, executes the analysis with correct diagnostics and sensitivity, and returns a business-ready report. Practitioners never see raw coefficients unless they want to.
 
-**Building blocks already in place.** Several agent-facing building blocks already ship - Baker et al. (2025) 8-step workflow enforcement, runtime LLM guides via `get_llm_guide(...)`, `profile_panel(...)` structural panel profiling, an "For AI agents" package-docstring entry block, and silent-operation warnings. See the README "For AI Agents" section and the bundled `llms*.txt` guides for the current surface.
+**Building blocks already in place.** Several agent-facing building blocks already ship - Baker et al. (2026) 8-step workflow enforcement, runtime LLM guides via `get_llm_guide(...)`, `profile_panel(...)` structural panel profiling, an "For AI agents" package-docstring entry block, and silent-operation warnings. See the README "For AI Agents" section and the bundled `llms*.txt` guides for the current surface.
 
 **Next blocks toward the vision.**
 
@@ -126,5 +126,5 @@ Interested in contributing? Under Consideration items with clear commit criteria
 Key references:
 
 - [Roth et al. (2023)](https://www.sciencedirect.com/science/article/abs/pii/S0304407623001318). "What's Trending in Difference-in-Differences?" *Journal of Econometrics*.
-- [Baker et al. (2025)](https://arxiv.org/pdf/2503.13323). "Difference-in-Differences Designs: A Practitioner's Guide."
+- [Baker et al. (2026)](https://doi.org/10.1257/jel.20251650). "Difference-in-Differences Designs: A Practitioner's Guide." *Journal of Economic Literature* 64(2): 498-557.
 - [Abadie, Angrist, Frandsen & Pischke (2025)](https://www.nber.org/papers/w34550). "Harvesting Differences-in-Differences and Event-Study Evidence." NBER WP 34550.

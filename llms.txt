@@ -6,7 +6,7 @@
 
 - Concise API reference: https://diff-diff.readthedocs.io/en/stable/llms.txt
 - Full API reference: https://diff-diff.readthedocs.io/en/stable/llms-full.txt
-- 8-step practitioner workflow (Baker et al. 2025): https://diff-diff.readthedocs.io/en/stable/llms-practitioner.txt
+- 8-step practitioner workflow (Baker et al. 2026): https://diff-diff.readthedocs.io/en/stable/llms-practitioner.txt
 
 After `pip install diff-diff`, also accessible in-process via `from diff_diff import get_llm_guide`:
 

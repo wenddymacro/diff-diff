@@ -1,9 +1,11 @@
 # diff-diff Practitioner Guide
 
 > An 8-step workflow for rigorous Difference-in-Differences analysis, based on
-> Baker et al. (2025) "Difference-in-Differences Designs: A Practitioner's
-> Guide" and adapted for the diff-diff library. Some steps are reorganized or
-> extended relative to the paper:
+> Baker, Callaway, Cunningham, Goodman-Bacon & Sant'Anna (2026)
+> "Difference-in-Differences Designs: A Practitioner's Guide," Journal of
+> Economic Literature 64(2): 498-557, and adapted for the diff-diff library.
+> The paper's eight steps are stated in its Section 6 (Conclusion), pp. 550-552.
+> Some steps are reorganized or extended relative to the paper:
 >
 > - **Numbering**: diff-diff uses 1-Define, 2-Assumptions, 3-Test PT,
 >   4-Choose estimator, 5-Estimate, 6-Sensitivity, 7-Heterogeneity,
@@ -16,7 +18,10 @@
 >   for asymptotic SEs, otherwise wild bootstrap where the estimator supports
 >   it (DiD with `cluster=`; TWFE auto-clusters) or a bootstrapped
 >   `n_bootstrap` otherwise. The 50-cluster threshold is
->   a diff-diff convention.
+>   a diff-diff convention. Folding the step does NOT drop what the paper
+>   asks for there: Step 5 opens with the paper's own question -- where does
+>   the randomness come from, what is held fixed, what is random -- because
+>   the cluster level follows from that answer rather than from convention.
 > - **Step 8** is "Robustness & Reporting" (compare estimators, report with
 >   and without covariates). The paper's Step 8 is "Keep learning." The
 >   mandatory with/without covariate comparison is a diff-diff convention.
@@ -280,6 +285,37 @@ print(bacon_result.summary())
 ---
 
 ## Step 5: Estimate
+
+### 5a. State where the uncertainty comes from (the paper's Step 4)
+
+Inference procedures follow from an assumption about where randomness enters
+the design. Before choosing a standard error, state — in one or two sentences
+that belong in the paper, not just in code — which of these you are adopting:
+
+- **Sampling**: units are drawn from a population; treatment groups AND
+  potential outcomes are random. Avoids time-series dependence restrictions on
+  potential outcomes and avoids taking a stand on error-component structure.
+  This is the perspective Baker et al. (2026) adopt in their own application.
+- **Design-based**: treatment assignment is random, potential outcomes are
+  held FIXED. Traditionally justified when assignment is fully random — a much
+  stronger requirement than parallel trends. See Rambachan & Roth (2025).
+- **Model-based**: randomness enters through a regression error term.
+  Restricting that error necessarily restricts treatment effect heterogeneity
+  and the relationship between potential outcomes, and it does not extend
+  cleanly to IPW / doubly robust estimators.
+
+**The cluster level is a consequence of this choice, not a habit.** Clustering
+below the level of treatment assignment can still be coherent under a sampling
+perspective (it corresponds to treating assignment-level shocks as fixed or
+conditioned on); clustering at the assignment level is what a design-based
+perspective calls for. Say which one you picked and why.
+
+Reference: Abadie, Athey, Imbens & Wooldridge (2020, 2023); Roth, Sant'Anna,
+Bilinski & Poe (2023) Section 5; Rambachan & Roth (2025). None of these is
+bundled with diff-diff — this step is a statement you write, not a function
+you call.
+
+### 5b. Choose inference compatible with that statement
 
 Before fitting, you MUST check the cluster count and choose inference
 accordingly. Do not assume — always print and decide based on the data.
@@ -746,5 +782,20 @@ guidance = practitioner_next_steps(results)
 ## References
 
 Baker, A., Callaway, B., Cunningham, S., Goodman-Bacon, A., & Sant'Anna, P.
-H. C. (2025). Difference-in-Differences Designs: A Practitioner's Guide.
-arXiv:2503.13323.
+H. C. (2026). Difference-in-Differences Designs: A Practitioner's Guide.
+Journal of Economic Literature, 64(2), 498-557.
+https://doi.org/10.1257/jel.20251650
+(Previously circulated as arXiv:2503.13323; cite the published version.)
+Replication data and code: https://doi.org/10.3886/E239028V1
+
+Abadie, A., Athey, S., Imbens, G. W., & Wooldridge, J. M. (2020).
+Sampling-Based versus Design-Based Uncertainty in Regression Analysis.
+Econometrica, 88(1), 265-296.
+
+Abadie, A., Athey, S., Imbens, G. W., & Wooldridge, J. M. (2023). When Should
+You Adjust Standard Errors for Clustering? Quarterly Journal of Economics,
+138(1), 1-35.
+
+Rambachan, A., & Roth, J. (2025). Design-Based Uncertainty for
+Quasi-Experiments. Journal of the American Statistical Association.
+https://doi.org/10.1080/01621459.2025.2526700

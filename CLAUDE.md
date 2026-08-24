@@ -201,7 +201,7 @@ When adding new functionality, the source of truth is:
 | `docs/doc-deps.yaml` | Source-to-documentation dependency map — **consult when any source file changes** |
 | `CONTRIBUTING.md` | Documentation requirements, test writing guidelines, implementation guidelines |
 | `.claude/memory.md` | Debugging patterns, tolerances, API conventions (git-tracked) |
-| `diff_diff/guides/llms-practitioner.txt` | Baker et al. (2025) 8-step practitioner workflow for AI agents (accessible at runtime via `diff_diff.get_llm_guide("practitioner")`) |
+| `diff_diff/guides/llms-practitioner.txt` | Baker et al. (2026, *JEL* 64(2):498-557) 8-step practitioner workflow for AI agents (accessible at runtime via `diff_diff.get_llm_guide("practitioner")`) |
 | `docs/performance-plan.md` | Performance optimization details |
 | `docs/benchmarks.rst` | Validation results vs R |
 
